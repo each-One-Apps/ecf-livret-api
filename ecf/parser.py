@@ -42,13 +42,26 @@ class JournalInvalide(ValueError):
     """Le journal ne peut pas être lu — on refuse plutôt que de deviner."""
 
 
-def _champs(bloc):
-    """Découpe un bloc en {clé: valeur} d'après ses libellés."""
+def _champs(bloc, rang):
+    """Découpe un bloc en {clé: valeur} d'après ses libellés.
+
+    Un libellé qui revient deux fois signale deux blocs collés faute de
+    séparateur — cas réel quand on concatène plusieurs sources. Sans ce
+    contrôle, la seconde valeur écrase la première et une évaluation
+    disparaîtrait sans un mot.
+    """
     trouves = list(RE_LIBELLE.finditer(bloc))
     champs = {}
     for i, m in enumerate(trouves):
+        cle = m.lastgroup
+        if cle in champs:
+            raise JournalInvalide(
+                f"évaluation {rang} : le libellé « {m.group(0).strip()} » apparaît deux fois. "
+                f"Deux blocs sont probablement collés — il manque une ligne « ---------- » "
+                f"entre eux."
+            )
         fin = trouves[i + 1].start() if i + 1 < len(trouves) else len(bloc)
-        champs[m.lastgroup] = bloc[m.end():fin].strip()
+        champs[cle] = bloc[m.end():fin].strip()
     return champs
 
 
@@ -99,7 +112,7 @@ def lire_journal(journal):
         if not bloc.strip():
             continue
         rang = len(evaluations) + 1
-        champs = _champs(bloc)
+        champs = _champs(bloc, rang)
 
         manquants = [c for c in CHAMPS_ATTENDUS if not champs.get(c)]
         if manquants:

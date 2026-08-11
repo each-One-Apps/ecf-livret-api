@@ -132,3 +132,16 @@ def test_le_rang_signale_est_celui_du_bloc_fautif():
     with pytest.raises(JournalInvalide) as e:
         lire_journal(journal)
     assert "évaluation 2" in str(e.value)
+
+
+def test_deux_blocs_colles_sont_refuses():
+    """Sans séparateur, la seconde évaluation écrasait la première en silence."""
+    colle = (
+        "Date : 2026-08-11\nActivité : 1. X\nCompétences évaluées : 1\n"
+        "Description des compétences : PREMIÈRE\n"
+        "Date : 2026-08-12\nActivité : 1. Y\nCompétences évaluées : 2\n"
+        "Description des compétences : SECONDE"
+    )
+    with pytest.raises(JournalInvalide) as e:
+        lire_journal(colle)
+    assert "deux fois" in str(e.value) and "----------" in str(e.value)
