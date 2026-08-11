@@ -40,6 +40,27 @@ il ne détient aucune clé, ne lit et n'écrit nulle part, et ne connaît que ce
 
 ### `POST /update-ecf-assessment`
 
+Deux façons d'envoyer le journal.
+
+**En texte brut — à privilégier.** Le corps *est* le journal, les paramètres passent par l'URL :
+
+```
+POST /update-ecf-assessment?record_id=recAbCdEfGhIjKlMn&livret=TP-00520
+Content-Type: text/plain; charset=utf-8
+
+Date : 2026-08-11
+Activité : 1. …
+…
+```
+
+Pourquoi ce mode existe : le journal contient des sauts de ligne, des guillemets et des
+apostrophes. L'orchestrateur qui appelle ce service (Make) **n'a pas de fonction
+d'échappement JSON** — construire un corps JSON par concaténation de texte y produit du JSON
+invalide dès qu'une description tient sur plusieurs lignes. En texte brut, il n'y a rien à
+échapper.
+
+**En JSON**, si l'appelant sait sérialiser proprement :
+
 ```json
 {
   "log": "<journal complet des évaluations>",
@@ -48,8 +69,8 @@ il ne détient aucune clé, ne lit et n'écrit nulle part, et ne connaît que ce
 }
 ```
 
-`livret` est optionnel (défaut `TP-00520`). `record_id` ne sert qu'à la traçabilité et au nom
-du fichier.
+Les deux formes produisent le même fichier. `livret` est optionnel (défaut `TP-00520`) ;
+`record_id` ne sert qu'à la traçabilité et au nom du fichier.
 
 **Réponse `200`** : le PDF en binaire (`application/pdf`), plus deux en-têtes —
 `X-ECF-Evaluations` (nombre d'évaluations dessinées) et `X-ECF-Tronquees` (rangs des

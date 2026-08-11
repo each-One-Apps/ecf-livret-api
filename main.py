@@ -2,8 +2,16 @@
 API de mise à jour du livret d'évaluations ECF.
 
 POST /update-ecf-assessment
-  Body : {"log": "<journal complet>", "record_id": "rec…", "livret": "TP-00520"}
   -> le livret rempli, en binaire (application/pdf)
+
+Deux façons d'envoyer le journal, au choix de l'appelant :
+
+  text/plain       le corps EST le journal, `record_id` et `livret` en paramètres
+                   d'URL. À privilégier : le journal contient des sauts de ligne,
+                   et Make n'a pas de fonction d'échappement JSON — construire un
+                   corps JSON à la main y produit du JSON invalide dès qu'une
+                   description tient sur plusieurs lignes.
+  application/json {"log": "…", "record_id": "rec…", "livret": "TP-00520"}
 
 Le journal est la concaténation de TOUS les blocs Fillout reçus depuis le début,
 y compris ceux de la soumission en cours. Le livret est reconstruit entièrement
@@ -16,9 +24,10 @@ doit pas emporter la génération des bulletins APNI.
 import logging
 import re
 
-from fastapi import FastAPI, HTTPException
+import json
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
 
 from ecf.livret import DEFAUT, LivretInconnu, codes_disponibles, construire
 from ecf.parser import JournalInvalide
@@ -32,23 +41,40 @@ RE_RECORD = re.compile(r"^rec[A-Za-z0-9]{14}$")
 app = FastAPI(title="ECF — livret d'évaluations")
 
 
-class RequeteLivret(BaseModel):
-    log: str = Field(default="", description="Journal complet des évaluations")
-    record_id: str = Field(default="", description="Record Airtable, pour la traçabilité")
-    livret: str = Field(default=DEFAUT, description="Code du titre professionnel")
-
-
 @app.get("/health")
 def health():
     return {"status": "ok", "livrets": codes_disponibles()}
 
 
+async def _lire_requete(request: Request, record_id, livret):
+    """Extrait (journal, record_id, livret) quel que soit le format d'envoi."""
+    type_contenu = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    corps = await request.body()
+
+    if type_contenu == "application/json":
+        try:
+            charge = json.loads(corps.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as e:
+            raise HTTPException(status_code=400, detail=f"corps JSON illisible : {e}")
+        if not isinstance(charge, dict):
+            raise HTTPException(status_code=400, detail="corps JSON : objet attendu")
+        return (
+            charge.get("log") or "",
+            charge.get("record_id") or record_id,
+            charge.get("livret") or livret,
+        )
+
+    # Texte brut : le corps est le journal, tel quel.
+    return corps.decode("utf-8", errors="replace"), record_id, livret
+
+
 @app.post("/update-ecf-assessment")
-def update_ecf_assessment(req: RequeteLivret):
-    ref = req.record_id if RE_RECORD.match(req.record_id or "") else "record inconnu"
+async def update_ecf_assessment(request: Request, record_id: str = "", livret: str = DEFAUT):
+    log, record_id, livret = await _lire_requete(request, record_id, livret)
+    ref = record_id if RE_RECORD.match(record_id or "") else "record inconnu"
 
     try:
-        pdf, rapport = construire(req.log, req.livret)
+        pdf, rapport = construire(log, livret)
     except LivretInconnu as e:
         logger.warning("%s — livret inconnu : %s", ref, e)
         raise HTTPException(status_code=404, detail=str(e))
@@ -68,7 +94,7 @@ def update_ecf_assessment(req: RequeteLivret):
         ref, rapport["evaluations"], rapport["par_activite"], len(pdf),
     )
 
-    nom = f"livret_ecf_{req.record_id}.pdf" if RE_RECORD.match(req.record_id or "") \
+    nom = f"livret_ecf_{record_id}.pdf" if RE_RECORD.match(record_id or "") \
         else "livret_ecf.pdf"
     return Response(
         content=pdf,
