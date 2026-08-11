@@ -30,7 +30,7 @@ def ligne_occupee(pdf, texte_cherche, activite=1):
 
     from ecf.livret import charger
 
-    _, coords = charger("TP-00520")
+    _, coords, _ = charger("TP-00520")
     bloc_principal = coords["activites"][str(activite)]["blocs"][0]
     with pdfplumber.open(io.BytesIO(pdf)) as doc:
         page = doc.pages[bloc_principal["page"]]
@@ -65,7 +65,7 @@ def test_les_anciennes_sans_numero_gardent_leur_ordre():
     journal = "\n".join([bloc("Plus tardive", jour=20), bloc("Plus ancienne", jour=11)])
     _, rapport = construire(journal)
     from ecf.parser import lire_journal
-    relues, _ = lire_journal(rapport["journal"])
+    relues, _, _ = lire_journal(rapport["journal"])
     assert [(e["ligne"], e["description"]) for e in relues] == [
         (1, "Plus ancienne"), (2, "Plus tardive")]
 

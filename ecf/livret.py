@@ -45,7 +45,16 @@ def charger(code):
         coords = json.load(f)
     with open(chemin_pdf, "rb") as f:
         template = f.read()
-    return template, coords
+
+    # Valeurs propres au titre (dates d'arrêté, de J.O., de mise à jour).
+    # Fichier optionnel : sans lui, ces zones restent vides.
+    chemin_libelles = os.path.join(DOSSIER, f"libelles_{code}.json")
+    libelles = {}
+    if os.path.exists(chemin_libelles):
+        with open(chemin_libelles, encoding="utf-8") as f:
+            libelles = {k: v for k, v in json.load(f).items()
+                        if not k.startswith("_") and isinstance(v, str)}
+    return template, coords, libelles
 
 
 def _cle_chronologique(ev):
@@ -149,8 +158,8 @@ def _dernier_avis_par_activite(avis):
 
 def construire(journal, code=DEFAUT):
     """journal brut -> (pdf, rapport). Lève JournalInvalide / LivretPlein / ValueError."""
-    template, coords = charger(code)
-    evaluations, avis = lire_journal(journal)
+    template, coords, libelles = charger(code)
+    evaluations, avis, candidat = lire_journal(journal)
     evaluations, doublons = _sans_doublons(evaluations)
     avis, avis_remplaces = _dernier_avis_par_activite(avis)
 
@@ -158,7 +167,8 @@ def construire(journal, code=DEFAUT):
     # chronologique, car l'ordre du journal n'est pas garanti.
     evaluations, lignes_remplacees = _placer(evaluations, coords)
 
-    pdf, tronquees = rendre(template, coords, evaluations, BLOCS_AUTORISES, avis)
+    pdf, tronquees = rendre(template, coords, evaluations, BLOCS_AUTORISES,
+                            avis, candidat, libelles)
 
     par_activite = {}
     for ev in evaluations:
@@ -174,7 +184,8 @@ def construire(journal, code=DEFAUT):
         "avis": len(avis),
         "avis_remplaces": avis_remplaces,
         "lignes_remplacees": lignes_remplacees,
-        "journal": ecrire_journal(evaluations, avis),
+        "candidat": candidat,
+        "journal": ecrire_journal(evaluations, avis, candidat),
     }
 
 

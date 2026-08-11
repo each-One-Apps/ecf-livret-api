@@ -174,6 +174,31 @@ activité 2 : 4 compétences | princ p.6 = 5 lignes, compl p.8 = 4 lignes | capa
 ⚠️ Le service ne sait pas **quel livret appliquer à quel apprenant** : c'est à l'appelant de
 passer `livret`. La règle d'aiguillage reste à définir.
 
+## Page de garde et pied de page
+
+Deux natures d'information, séparées parce qu'elles ne changent pas au même rythme.
+
+**Constantes du titre** — `ecf/libelles_<CODE>.json` : dates d'arrêté, de J.O., d'effet, et les
+colonnes « Date JO » / « Date de mise à jour » répétées sur les 10 pages. Identiques pour tous
+les candidats, donc versionnées avec le template. **Un champ vide n'écrit rien** : jamais de
+texte de remplissage sur un document soumis à jury.
+
+**Informations du candidat** — un bloc `Candidat` dans le journal, comme les évaluations :
+
+```
+Candidat :
+Civilité : Mme
+Nom : MARTÍNEZ
+Prénom : Sofia
+Date de naissance : 14/03/1998
+Organisme de formation : each One
+Lieu de formation : Paris 18e
+----------
+```
+
+La civilité coche la case correspondante ; une valeur autre que Mme ou M. est refusée plutôt
+que devinée. Le bloc peut arriver partiellement rempli : seuls les champs fournis sont écrits.
+
 ## Corriger
 
 Le journal est l'original, le PDF n'en est qu'une projection : on corrige le journal, jamais le

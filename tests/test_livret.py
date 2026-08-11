@@ -38,7 +38,7 @@ def sans_espaces(texte):
 
 
 def test_geometrie_conforme_au_template():
-    _, coords = charger("TP-00520")
+    _, coords, _ = charger("TP-00520")
     assert set(coords["activites"]) == {"1", "2"}
     for numero, page in (("1", 2), ("2", 5)):
         activite = coords["activites"][numero]
@@ -52,7 +52,7 @@ def test_geometrie_conforme_au_template():
 def test_journal_vide_rend_le_livret_vierge():
     pdf, rapport = construire("")
     assert rapport["evaluations"] == 0
-    template, _ = charger("TP-00520")
+    template, _, _ = charger("TP-00520")
     assert len(pdf) > 0 and rapport["par_activite"] == {}
 
 

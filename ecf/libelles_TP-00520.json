@@ -1,0 +1,22 @@
+{
+  "_lisez_moi": [
+    "Valeurs propres au TITRE professionnel, identiques pour tous les candidats.",
+    "Un champ laissé vide n'est simplement pas écrit sur le livret : jamais de",
+    "texte de remplissage sur un document soumis à jury.",
+    "Les informations du CANDIDAT, elles, ne sont pas ici : elles arrivent par",
+    "le journal, dans un bloc « Candidat »."
+  ],
+  "arrete_du": "",
+  "jo_du": "",
+  "date_effet": "",
+  "date_jo": "",
+  "date_maj": "",
+
+  "_a_completer": {
+    "arrete_du": "page 1 — « Arrêté du : » (date de l'arrêté du titre)",
+    "jo_du": "page 1 — « J.O. du : » (parution au Journal officiel)",
+    "date_effet": "page 1 — « Date d'effet au : »",
+    "date_jo": "pied de page des 10 pages — colonne « Date JO »",
+    "date_maj": "pied de page des 10 pages — colonne « Date de mise à jour »"
+  }
+}

@@ -187,6 +187,117 @@ def extraire_tableau(page, nb_competences, etiquette):
     return lignes
 
 
+GARDE_APRES_DEUX_POINTS = (
+    ("arrete_du", re.compile(r"^Arrêté\s+du\s*:", re.I)),
+    ("jo_du", re.compile(r"^J\.?O\.?\s+du\s*:", re.I)),
+    ("date_effet", re.compile(r"^Date\s+d[’']effet\s+au\s*:", re.I)),
+)
+GARDE_APRES_MARQUEUR = (
+    ("organisme", re.compile(r"^Organisme\s+de\s+formation", re.I)),
+    ("lieu", re.compile(r"^Lieu\s+de\s+formation", re.I)),
+    ("nom", re.compile(r"^Nom\b", re.I)),
+    ("prenom", re.compile(r"^Prénom\b", re.I)),
+    ("naissance", re.compile(r"^Date\s+de\s+naissance", re.I)),
+)
+RE_CIVILITE = re.compile(r"Candidat\(e\)", re.I)
+MARQUEUR = "►"
+
+# Pied de page : la colonne « Date JO » et « Date de mise à jour » sont vides
+# dans le modèle du ministère et doivent être renseignées sur les 10 pages.
+PIED_COLONNES = ("Date JO", "Date de mise à jour")
+
+
+def extraire_garde(page, etiquette):
+    """Zones de la page de garde : dates du titre, organisme, candidat."""
+    hauteur = page.height
+    lignes = page.extract_text_lines()
+    garde = {}
+
+    # « Arrêté du : » etc. — la valeur se pose juste après les deux-points.
+    for cle, motif in GARDE_APRES_DEUX_POINTS:
+        ligne = next((l for l in lignes if motif.match(l["text"].strip())), None)
+        if ligne is None:
+            raise SystemExit(f"{etiquette} : « {cle} » introuvable en page de garde")
+        garde[cle] = {
+            "ancre": [round(ligne["x1"] + 6.0, 2),
+                      round(hauteur - ligne["bottom"] + 1.5, 2)],
+            "libelle": ligne["text"].strip(),
+        }
+
+    # « Organisme de formation ► » etc. — le modèle marque la place d'un ►.
+    marqueurs = sorted(
+        [c for c in page.chars if c["text"] == MARQUEUR], key=lambda c: c["top"]
+    )
+    for cle, motif in GARDE_APRES_MARQUEUR:
+        ligne = next((l for l in lignes if motif.match(l["text"].strip())), None)
+        if ligne is None:
+            raise SystemExit(f"{etiquette} : « {cle} » introuvable en page de garde")
+        proche = [m for m in marqueurs if abs(m["top"] - ligne["top"]) < 12]
+        if not proche:
+            raise SystemExit(f"{etiquette} : aucun marqueur « {MARQUEUR} » face à « {cle} »")
+        m = proche[0]
+        garde[cle] = {
+            "ancre": [round(m["x1"] + 4.0, 2), round(hauteur - m["bottom"] + 1.0, 2)],
+            "libelle": ligne["text"].strip(),
+        }
+
+    # Civilité : deux cases sur la ligne « Candidat(e) : Mme ☐ M. ☐ ».
+    ligne = next((l for l in lignes if RE_CIVILITE.search(l["text"])), None)
+    if ligne is None:
+        raise SystemExit(f"{etiquette} : ligne « Candidat(e) » introuvable")
+    cases = sorted(
+        [c for c in page.chars
+         if c["text"] == "☐" and ligne["top"] - 4 <= c["top"] <= ligne["bottom"] + 4],
+        key=lambda c: c["x0"],
+    )
+    if len(cases) != 2:
+        raise SystemExit(f"{etiquette} : {len(cases)} case(s) de civilité, 2 attendues")
+    garde["civilite"] = {
+        cle: [round((c["x0"] + c["x1"]) / 2, 2),
+              round(hauteur - (c["top"] + c["bottom"]) / 2, 2)]
+        for cle, c in zip(("mme", "m"), cases)
+    }
+    return garde
+
+
+def extraire_pied(pages, etiquette):
+    """Cellules « Date JO » et « Date de mise à jour » du pied, sur chaque page."""
+    pied = {cle: [] for cle in ("date_jo", "date_maj")}
+    for idx, page in enumerate(pages):
+        hauteur = page.height
+        lignes = page.extract_text_lines()
+        entete = next((l for l in lignes if "SIGLE" in l["text"]), None)
+        if entete is None:
+            raise SystemExit(f"{etiquette} : pied de page absent p.{idx + 1}")
+
+        filets = sorted({round(e["top"], 1) for e in page.edges
+                         if e["orientation"] == "h" and e["x0"] < 40
+                         and e["top"] > entete["top"] - 8})[:3]
+        if len(filets) < 3:
+            raise SystemExit(f"{etiquette} : pied de page incomplet p.{idx + 1}")
+        haut, bas = filets[1], filets[2]  # la ligne des valeurs
+
+        # Le bord de page (x=0) traverse aussi cette bande : sans la borne
+        # inférieure il s'ajoute aux montants et décale toutes les colonnes d'un
+        # cran — la date se retrouve alors écrite sur le millésime.
+        colonnes = sorted({round(e["x0"], 1) for e in page.edges
+                           if e["orientation"] == "v" and 20 < e["x0"] < 570
+                           and e["top"] <= filets[0] + 4 and e["bottom"] >= bas - 4})
+        if len(colonnes) != 8:
+            raise SystemExit(
+                f"{etiquette} : {len(colonnes)} montants de pied p.{idx + 1}, 8 attendus "
+                f"({colonnes})"
+            )
+        # SIGLE | Type | Code titre | Millésime | Date JO | Date de mise à jour | Page
+        for cle, i in (("date_jo", 4), ("date_maj", 5)):
+            pied[cle].append({
+                "page": idx,
+                "cadre": [round(colonnes[i] + 1.5, 2), round(hauteur - bas + 1.5, 2),
+                          round(colonnes[i + 1] - 1.5, 2), round(hauteur - haut - 1.0, 2)],
+            })
+    return pied
+
+
 def _filets_larges(page, au_dessus_de=0.0):
     return sorted(
         {round(e["top"], 1) for e in page.edges
@@ -353,6 +464,8 @@ def main(chemin_pdf, chemin_sortie):
 
         donnees = {
             "template_sha256": empreinte,
+            "garde": extraire_garde(pages[0], "page de garde"),
+            "pied": extraire_pied(pages, "pied de page"),
             "page_size": [round(pages[0].width, 2), round(pages[0].height, 2)],
             "activites": activites,
         }

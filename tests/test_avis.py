@@ -61,7 +61,7 @@ def traits_sur(pdf, page_index):
 
 def case_cochee(pdf, activite):
     """-> 'satisfait', 'non_satisfait', ou None si aucune croix."""
-    _, coords = charger("TP-00520")
+    _, coords, _ = charger("TP-00520")
     resultat = coords["activites"][str(activite)]["avis"]["resultat"]
     trouvees = []
     for cle, c in resultat.items():
@@ -93,7 +93,7 @@ def test_la_negation_ne_coche_pas_aussi_la_case_positive():
 
 
 def test_activite_2_les_cases_sont_sur_deux_pages():
-    _, coords = charger("TP-00520")
+    _, coords, _ = charger("TP-00520")
     res = coords["activites"]["2"]["avis"]["resultat"]
     assert res["satisfait"]["page"] == 5      # bas de la fiche
     assert res["non_satisfait"]["page"] == 6  # haut de la page suivante
@@ -149,7 +149,7 @@ def test_le_journal_canonique_conserve_l_avis(signature):
     from ecf.parser import lire_journal
 
     pdf, rapport = construire(avis(points="Un point", f2="Imène B.", s1=signature))
-    _, relus = lire_journal(rapport["journal"])
+    _, relus, _ = lire_journal(rapport["journal"])
     assert len(relus) == 1
     assert relus[0]["activite"] == 1
     assert relus[0]["formateurs"][1]["nom"] == "Imène B."
@@ -206,7 +206,7 @@ def test_le_journal_ne_conserve_que_l_avis_retenu():
 
     journal = avis(f1="Premier") + "\n" + avis(f1="Second")
     _, rapport = construire(journal)
-    _, relus = lire_journal(rapport["journal"])
+    _, relus, _ = lire_journal(rapport["journal"])
     assert len(relus) == 1
     assert relus[0]["formateurs"][0]["nom"] == "Second"
 

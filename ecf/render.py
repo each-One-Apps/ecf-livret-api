@@ -218,6 +218,56 @@ def _dessine_avis(c_par_page, coords_activite, avis, rang, signatures):
             )
 
 
+def _dessine_gauche(c, ancre, texte, taille=10):
+    """Texte posé à partir d'un point d'ancrage, sans cadre à respecter."""
+    c.setFont(POLICE, taille)
+    c.setFillColorRGB(*ENCRE)
+    c.drawString(ancre[0], ancre[1], texte)
+
+
+def _dessine_garde(c_par_page, coords, candidat, libelles):
+    """Page de garde : dates du titre, organisme, lieu, identité du candidat.
+
+    Un champ vide n'écrit rien. Pas de texte de remplissage sur un document
+    soumis à jury : mieux vaut une ligne blanche qu'un « à compléter » imprimé.
+    """
+    garde = coords.get("garde")
+    if not garde:
+        return
+
+    for cle in ("arrete_du", "jo_du", "date_effet"):
+        valeur = (libelles.get(cle) or "").strip()
+        if valeur:
+            c_par_page.setdefault(0, []).append(("gauche", garde[cle]["ancre"], valeur))
+
+    for cle in ("organisme", "lieu", "nom", "prenom", "naissance"):
+        valeur = (candidat.get(cle) or "").strip()
+        if valeur:
+            c_par_page.setdefault(0, []).append(("gauche", garde[cle]["ancre"], valeur))
+
+    civilite = _normalise(candidat.get("civilite", ""))
+    if civilite:
+        cle = "mme" if civilite.startswith("mme") else "m" if civilite in ("m", "mr", "monsieur") else None
+        if cle is None:
+            raise ValueError(
+                f"civilité « {candidat['civilite'][:20]} » non reconnue (Mme ou M. attendu)"
+            )
+        c_par_page.setdefault(0, []).append(("croix", garde["civilite"][cle]))
+
+
+def _dessine_pied(c_par_page, coords, libelles):
+    """Colonnes « Date JO » et « Date de mise à jour », sur les 10 pages."""
+    pied = coords.get("pied") or {}
+    for cle in ("date_jo", "date_maj"):
+        valeur = (libelles.get(cle) or "").strip()
+        if not valeur:
+            continue
+        for cellule in pied.get(cle, []):
+            c_par_page.setdefault(cellule["page"], []).append(
+                ("centre", cellule["cadre"], valeur)
+            )
+
+
 def _emplacements(activite, blocs_autorises):
     """Aplatit les blocs d'une activité en une liste ordonnée de lignes."""
     places = []
@@ -229,7 +279,8 @@ def _emplacements(activite, blocs_autorises):
     return places
 
 
-def rendre(template_bytes, coords, evaluations, blocs_autorises=("principale",), avis=()):
+def rendre(template_bytes, coords, evaluations, blocs_autorises=("principale",),
+           avis=(), candidat=None, libelles=None):
     """evaluations : liste de dicts {activite, date, competences, description}.
 
     L'ordre de la liste fait l'ordre des lignes dans le livret. `avis` porte les
@@ -285,6 +336,9 @@ def rendre(template_bytes, coords, evaluations, blocs_autorises=("principale",),
             raise ValueError(f"avis {rang} : activité {a['activite']} absente du livret")
         _dessine_avis(tracés_avis, activite, a, rang, signatures)
 
+    _dessine_garde(tracés_avis, coords, candidat or {}, libelles or {})
+    _dessine_pied(tracés_avis, coords, libelles or {})
+
     for page_index in sorted(set(par_page) | set(tracés_avis)):
         entrees = par_page.get(page_index, [])
         page = ecrivain.pages[page_index]
@@ -304,6 +358,10 @@ def rendre(template_bytes, coords, evaluations, blocs_autorises=("principale",),
                 _dessine_croix(c, action[1], cote=7.0)
             elif action[0] == "texte":
                 _dessine_description(c, action[1], action[2])
+            elif action[0] == "gauche":
+                _dessine_gauche(c, action[1], action[2])
+            elif action[0] == "centre":
+                _dessine_date(c, action[1], action[2])
             elif action[0] == "image":
                 _dessine_image(c, action[1], action[2], action[3])
 

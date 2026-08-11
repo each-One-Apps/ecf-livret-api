@@ -56,6 +56,22 @@ RE_LIBELLE_AVIS = re.compile(
 )
 RE_EST_AVIS = re.compile(r"^[ \t]*avis\s+activit[ée][ \t]*:", re.I | re.M)
 
+# Troisième type de bloc : l'identité du candidat et le lieu de formation,
+# qui alimentent la page de garde. Une seule fois par livret.
+RE_LIBELLE_CANDIDAT = re.compile(
+    r"^[ \t]*(?:"
+    r"(?P<marqueur>candidat)"
+    r"|(?P<civilite>civilit[ée])"
+    r"|(?P<naissance>date\s+de\s+naissance)"
+    r"|(?P<nom>nom)"
+    r"|(?P<prenom>pr[ée]nom)"
+    r"|(?P<organisme>organisme\s+de\s+formation)"
+    r"|(?P<lieu>lieu\s+de\s+formation)"
+    r")[ \t]*:[ \t]*",
+    re.I | re.M,
+)
+RE_EST_CANDIDAT = re.compile(r"^[ \t]*candidat[ \t]*:", re.I | re.M)
+
 
 class JournalInvalide(ValueError):
     """Le journal ne peut pas être lu — on refuse plutôt que de deviner."""
@@ -168,6 +184,20 @@ def _lire_avis(bloc, rang):
     return avis
 
 
+def _lire_candidat(bloc):
+    """Bloc « Candidat » -> dict, ou None si rien n'est renseigné.
+
+    Ces informations ne changent pas d'une soumission à l'autre : le bloc arrive
+    à chaque fois, souvent partiellement rempli. On garde ce qui est fourni.
+    """
+    champs = _champs(bloc, 1, RE_LIBELLE_CANDIDAT)
+    candidat = {
+        cle: " ".join(champs.get(cle, "").split())
+        for cle in ("civilite", "nom", "prenom", "naissance", "organisme", "lieu")
+    }
+    return candidat if any(candidat.values()) else None
+
+
 def _numero_activite_libre(valeur, rang):
     """« Activité-type 1 », « 1. Contribuer… » ou « 1 » -> 1."""
     m = re.search(r"(\d+)", valeur or "")
@@ -182,17 +212,23 @@ def _numero_activite_libre(valeur, rang):
 
 
 def lire_journal(journal):
-    """Journal brut -> (évaluations, avis).
+    """Journal brut -> (évaluations, avis, candidat).
 
     Les blocs vides sont ignorés : la concaténation côté Make peut en produire
     quand une seule des deux activités est renseignée.
     """
     if not journal or not journal.strip():
-        return [], []
+        return [], [], {}
 
-    evaluations, avis = [], []
+    evaluations, avis, candidat = [], [], {}
     for bloc in SEPARATEUR.split(journal):
         if not bloc.strip():
+            continue
+
+        if RE_EST_CANDIDAT.search(bloc):
+            lu = _lire_candidat(bloc)
+            if lu:
+                candidat.update({k: v for k, v in lu.items() if v})
             continue
 
         if RE_EST_AVIS.search(bloc):
@@ -232,10 +268,10 @@ def lire_journal(journal):
             # enregistrées avant l'existence de ce champ n'en portent pas.
             "ligne": _numero_ligne(champs.get("ligne", ""), rang),
         })
-    return evaluations, avis
+    return evaluations, avis, candidat
 
 
-def ecrire_journal(evaluations, avis=()):
+def ecrire_journal(evaluations, avis=(), candidat=None):
     """Évaluations -> journal canonique, au même format que l'entrée.
 
     C'est ce texte que l'appelant réécrit dans son champ : dédoublonné, trié,
@@ -275,6 +311,19 @@ def ecrire_journal(evaluations, avis=()):
                 date=a["date"], n1=a["formateurs"][0]["nom"], n2=a["formateurs"][1]["nom"],
                 s1=a["formateurs"][0]["signature"], s2=a["formateurs"][1]["signature"],
             )
+        )
+    if candidat and any(candidat.values()):
+        blocs.append(
+            "Candidat :\n"
+            "Civilité : {civilite}\n"
+            "Nom : {nom}\n"
+            "Prénom : {prenom}\n"
+            "Date de naissance : {naissance}\n"
+            "Organisme de formation : {organisme}\n"
+            "Lieu de formation : {lieu}\n"
+            "----------".format(**{k: candidat.get(k, "") for k in
+                                   ("civilite", "nom", "prenom", "naissance",
+                                    "organisme", "lieu")})
         )
     return "\n".join(blocs) + ("\n" if blocs else "")
 
