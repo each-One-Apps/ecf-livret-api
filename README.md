@@ -179,6 +179,14 @@ passer `livret`. La règle d'aiguillage reste à définir.
 Le journal est l'original, le PDF n'en est qu'une projection : on corrige le journal, jamais le
 document.
 
+**Une évaluation se corrige en la renvoyant sur sa ligne.** Le bloc porte un champ
+`Ligne : 1..5` : c'est l'auteur qui désigne sa place dans le tableau. Renvoyer une évaluation
+sur une ligne déjà occupée la **remplace**. Les trous sont permis — choisir la ligne 3 quand 1
+et 2 sont vides est un choix, pas une erreur. Signalé par `X-ECF-Lignes-Remplacees`.
+
+Les évaluations enregistrées avant ce champ n'ont pas de numéro : elles reçoivent leur place
+d'après leur ordre chronologique, puis les blocs numérotés écrasent celle qu'ils réclament.
+
 **L'avis final se refait.** Il n'y en a qu'un par activité-type : si l'appelant en renvoie un
 second, il **remplace** le précédent. C'est l'ordre d'arrivée qui tranche, pas la date saisie —
 un avis refait le jour même porterait la même date. Le remplacement est signalé par l'en-tête

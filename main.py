@@ -154,6 +154,8 @@ async def update_ecf_assessment(
 
     nom = f"livret_ecf_{record_id}.pdf" if RE_RECORD.match(record_id or "") \
         else "livret_ecf.pdf"
+    if rapport["lignes_remplacees"]:
+        logger.info("%s — évaluations corrigées sur place : %s", ref, rapport["lignes_remplacees"])
     if rapport["avis_remplaces"]:
         logger.info(
             "%s — avis refait sur l'activité %s : le précédent est remplacé",
@@ -168,6 +170,8 @@ async def update_ecf_assessment(
         "X-ECF-Evaluations": str(rapport["evaluations"]),
         "X-ECF-Avis": str(rapport["avis"]),
         "X-ECF-Avis-Remplaces": ",".join(str(n) for n in rapport["avis_remplaces"]),
+        "X-ECF-Lignes-Remplacees": ",".join(
+            f"{r['activite']}:{r['ligne']}" for r in rapport["lignes_remplacees"]),
         "X-ECF-Tronquees": ",".join(str(n) for n in rapport["descriptions_tronquees"]),
         "X-ECF-Doublons": ",".join(str(n) for n in rapport["doublons_ignores"]),
     }
@@ -199,6 +203,7 @@ async def update_ecf_assessment(
             "evaluations": rapport["evaluations"],
             "avis": rapport["avis"],
             "avis_remplaces": rapport["avis_remplaces"],
+            "lignes_remplacees": rapport["lignes_remplacees"],
             "doublons_ignores": rapport["doublons_ignores"],
         },
         headers=entetes,

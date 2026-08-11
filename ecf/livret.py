@@ -74,6 +74,60 @@ def _sans_doublons(evaluations):
     return gardees, doublons
 
 
+def _placer(evaluations, coords):
+    """Attribue à chaque évaluation sa ligne dans le tableau de son activité.
+
+    Le formateur choisit sa place : renvoyer une évaluation sur une ligne déjà
+    prise la **corrige** au lieu de s'y ajouter. C'est ce qui lui donne un moyen
+    de correction autonome depuis le formulaire.
+
+    Les évaluations enregistrées avant l'existence de ce champ n'ont pas de
+    numéro : elles reçoivent d'abord leur place d'après leur ordre chronologique,
+    puis les blocs numérotés écrasent celle qu'ils réclament. Une correction
+    porte donc bien sur l'évaluation qui occupait visiblement cette ligne.
+
+    Les trous sont permis : choisir la ligne 3 alors que 1 et 2 sont vides est un
+    choix légitime, pas une erreur.
+    """
+    par_activite = {}
+    for ev in evaluations:
+        par_activite.setdefault(ev["activite"], []).append(ev)
+
+    placees, remplacees = [], []
+    for numero in sorted(par_activite):
+        activite = coords["activites"].get(str(numero))
+        if activite is None:
+            raise ValueError(f"évaluation : activité {numero} absente du livret")
+        capacite = sum(len(b["lignes"]) for b in activite["blocs"]
+                       if b["type"] in BLOCS_AUTORISES)
+
+        evs = par_activite[numero]
+        places = {}
+
+        anciennes = sorted([e for e in evs if e["ligne"] is None], key=_cle_chronologique)
+        for rang, ev in enumerate(anciennes, 1):
+            if rang > capacite:
+                raise LivretPlein(
+                    f"activité {numero} : {rang}e évaluation, le livret n'accepte "
+                    f"que {capacite} lignes"
+                )
+            places[rang] = dict(ev, ligne=rang)
+
+        for ev in [e for e in evs if e["ligne"] is not None]:
+            ligne = ev["ligne"]
+            if not 1 <= ligne <= capacite:
+                raise ValueError(
+                    f"activité {numero} : ligne {ligne} demandée, le livret n'en a "
+                    f"que {capacite}"
+                )
+            if ligne in places:
+                remplacees.append({"activite": numero, "ligne": ligne})
+            places[ligne] = ev
+
+        placees.extend(places[l] for l in sorted(places))
+    return placees, remplacees
+
+
 def _dernier_avis_par_activite(avis):
     """Un seul avis final par activité-type : le dernier reçu l'emporte.
 
@@ -100,10 +154,9 @@ def construire(journal, code=DEFAUT):
     evaluations, doublons = _sans_doublons(evaluations)
     avis, avis_remplaces = _dernier_avis_par_activite(avis)
 
-    # L'ordre du journal n'est pas garanti — l'émetteur peut renvoyer l'historique
-    # dans son propre ordre. Le livret, lui, se lit chronologiquement. Tri stable :
-    # deux évaluations du même jour gardent leur ordre d'arrivée.
-    evaluations.sort(key=_cle_chronologique)
+    # La place vient du formateur quand il l'a choisie ; sinon de l'ordre
+    # chronologique, car l'ordre du journal n'est pas garanti.
+    evaluations, lignes_remplacees = _placer(evaluations, coords)
 
     pdf, tronquees = rendre(template, coords, evaluations, BLOCS_AUTORISES, avis)
 
@@ -120,6 +173,7 @@ def construire(journal, code=DEFAUT):
         # Journal canonique à réécrire à la source : dédoublonné et trié.
         "avis": len(avis),
         "avis_remplaces": avis_remplaces,
+        "lignes_remplacees": lignes_remplacees,
         "journal": ecrire_journal(evaluations, avis),
     }
 

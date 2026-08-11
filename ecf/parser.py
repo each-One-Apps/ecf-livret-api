@@ -29,6 +29,7 @@ RE_LIBELLE = re.compile(
     r"(?P<date>date)"
     r"|(?P<competences>comp[ée]tences\s+[ée]valu[ée]es)"
     r"|(?P<description>description\s+des\s+comp[ée]tences)"
+    r"|(?P<ligne>ligne)"
     r"|(?P<activite>activit[ée])"
     r")[ \t]*:[ \t]*",
     re.I | re.M,
@@ -101,6 +102,23 @@ def _numero_activite(valeur, rang):
         raise JournalInvalide(
             f"évaluation {rang} : l'activité « {valeur[:60]} » ne commence pas "
             f"par son numéro (attendu « 1. … »)"
+        )
+    return int(m.group(1))
+
+
+def _numero_ligne(valeur, rang):
+    """« 3 » -> 3, vide -> None.
+
+    C'est le formateur qui désigne la ligne du tableau : renvoyer une évaluation
+    sur une place déjà prise la corrige au lieu de s'y ajouter.
+    """
+    valeur = (valeur or "").strip()
+    if not valeur:
+        return None
+    m = re.search(r"(\d+)", valeur)
+    if not m:
+        raise JournalInvalide(
+            f"évaluation {rang} : ligne « {valeur[:30]} » illisible (un nombre attendu)"
         )
     return int(m.group(1))
 
@@ -210,6 +228,9 @@ def lire_journal(journal):
             "date": _date(champs["date"], rang),
             "competences": _competences(champs["competences"], rang),
             "description": " ".join(champs["description"].split()),
+            # Place choisie par le formateur, ou None : les évaluations
+            # enregistrées avant l'existence de ce champ n'en portent pas.
+            "ligne": _numero_ligne(champs.get("ligne", ""), rang),
         })
     return evaluations, avis
 
@@ -224,11 +245,13 @@ def ecrire_journal(evaluations, avis=()):
     blocs = []
     for ev in evaluations:
         blocs.append(
+            "Ligne : {ligne}\n"
             "Date : {date}\n"
             "Activité : {intitule}\n"
             "Compétences évaluées : {competences}\n"
             "Description des compétences : {description}\n"
             "----------".format(
+                ligne=ev.get("ligne") or "",
                 date=ev["date"],
                 intitule=ev["intitule"],
                 competences=", ".join(str(n) for n in ev["competences"]),

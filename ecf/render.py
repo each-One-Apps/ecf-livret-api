@@ -258,10 +258,11 @@ def rendre(template_bytes, coords, evaluations, blocs_autorises=("principale",),
             raise ValueError(f"évaluation {rang} : activité {cle} absente du livret")
 
         places = _emplacements(activite, blocs_autorises)
-        i = compteurs.get(cle, 0)
-        if i >= len(places):
+        # La place est décidée en amont (ecf.livret._placer) : ici on l'applique.
+        i = (ev.get("ligne") or compteurs.get(cle, 0) + 1) - 1
+        if not 0 <= i < len(places):
             raise LivretPlein(
-                f"activité {cle} : {i + 1}e évaluation, le livret n'accepte "
+                f"activité {cle} : ligne {i + 1} demandée, le livret n'accepte "
                 f"que {len(places)} lignes"
             )
         compteurs[cle] = i + 1
