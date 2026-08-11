@@ -72,9 +72,32 @@ invalide dès qu'une description tient sur plusieurs lignes. En texte brut, il n
 Les deux formes produisent le même fichier. `livret` est optionnel (défaut `TP-00520`) ;
 `record_id` ne sert qu'à la traçabilité et au nom du fichier.
 
-**Réponse `200`** : le PDF en binaire (`application/pdf`), plus deux en-têtes —
+**Réponse `200`** : le format de pièce jointe attendu par Airtable, plus deux en-têtes —
 `X-ECF-Evaluations` (nombre d'évaluations dessinées) et `X-ECF-Tronquees` (rangs des
 descriptions qui ne tenaient pas dans leur cellule).
+
+```json
+[{"url": "https://…/livret.pdf?j=eNqFz8EK…", "filename": "livret_ecf_rec….pdf"}]
+```
+
+Ajouter `?format=pdf` pour récupérer le binaire directement — pratique en test.
+
+### `GET /livret.pdf?j=<journal compressé>`
+
+Régénère le livret. C'est l'URL qu'Airtable télécharge.
+
+**Pourquoi ce détour.** Un champ *attachment* Airtable ne se remplit pas avec des octets : il
+faut lui donner une URL, qu'il va chercher lui-même. Pousser le binaire échoue — `422 Invalid
+attachment object`, ou `413` si le fichier est gros.
+
+Restait à savoir *où* héberger le PDF. Plutôt que d'ajouter un stockage et un jeton à un service
+qui n'a aucun secret, l'URL pointe vers **ce même service** et porte le journal compressé
+(zlib + base64url). Le rendu étant déterministe, le `GET` reproduit le fichier à l'octet près.
+Aucun état, aucune expiration, aucun ménage à faire.
+
+En pratique deux évaluations tiennent dans une URL de ~300 caractères. Au-delà de 8 000
+caractères encodés, le service refuse en `422` plutôt que de fabriquer une URL que personne
+n'acceptera.
 
 **`422`** — la demande est bien formée mais refusée : journal illisible, activité inconnue,
 compétence hors référentiel, ou livret plein. **`404`** — code de livret inconnu.

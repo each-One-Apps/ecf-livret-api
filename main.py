@@ -21,13 +21,15 @@ l'octet près. Un rejeu du scénario Make ne peut donc pas dupliquer une ligne.
 Service volontairement séparé de `apni-bulletin-api` : un démarrage raté ici ne
 doit pas emporter la génération des bulletins APNI.
 """
+import base64
+import json
 import logging
 import re
-
-import json
+import zlib
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from ecf.livret import DEFAUT, LivretInconnu, codes_disponibles, construire
 from ecf.parser import JournalInvalide
@@ -37,6 +39,35 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("ecf")
 
 RE_RECORD = re.compile(r"^rec[A-Za-z0-9]{14}$")
+
+# Airtable télécharge les pièces jointes depuis une URL : impossible de lui
+# pousser des octets. Plutôt que d'héberger le PDF quelque part — ce qui
+# imposerait un stockage et un secret à un service qui n'en a aucun — on lui
+# renvoie une URL vers ce même service, portant le journal compressé. Le rendu
+# étant déterministe, le GET reproduit le fichier à l'octet près.
+URL_MAX = 8000
+
+
+def _encoder_journal(journal):
+    brut = zlib.compress(journal.encode("utf-8"), 9)
+    return base64.urlsafe_b64encode(brut).decode("ascii").rstrip("=")
+
+
+def _decoder_journal(encode):
+    rembourrage = "=" * (-len(encode) % 4)
+    try:
+        return zlib.decompress(base64.urlsafe_b64decode(encode + rembourrage)).decode("utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"paramètre « j » illisible : {e}")
+
+
+def _base_url(request):
+    """URL publique du service, en tenant compte du proxy de l'hébergeur."""
+    hote = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    protocole = request.headers.get("x-forwarded-proto") or request.url.scheme
+    if not hote:
+        return str(request.base_url).rstrip("/")
+    return f"{protocole}://{hote}"
 
 app = FastAPI(title="ECF — livret d'évaluations")
 
@@ -68,8 +99,27 @@ async def _lire_requete(request: Request, record_id, livret):
     return corps.decode("utf-8", errors="replace"), record_id, livret
 
 
+@app.get("/livret.pdf")
+def livret_pdf(j: str = "", livret: str = DEFAUT, nom: str = "livret_ecf.pdf"):
+    """Régénère le livret depuis le journal encodé. C'est cette URL qu'Airtable télécharge."""
+    journal = _decoder_journal(j) if j else ""
+    try:
+        pdf, _ = construire(journal, livret)
+    except LivretInconnu as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (JournalInvalide, LivretPlein, ValueError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nom}"'},
+    )
+
+
 @app.post("/update-ecf-assessment")
-async def update_ecf_assessment(request: Request, record_id: str = "", livret: str = DEFAUT):
+async def update_ecf_assessment(
+    request: Request, record_id: str = "", livret: str = DEFAUT, format: str = "airtable"
+):
     log, record_id, livret = await _lire_requete(request, record_id, livret)
     ref = record_id if RE_RECORD.match(record_id or "") else "record inconnu"
 
@@ -96,12 +146,24 @@ async def update_ecf_assessment(request: Request, record_id: str = "", livret: s
 
     nom = f"livret_ecf_{record_id}.pdf" if RE_RECORD.match(record_id or "") \
         else "livret_ecf.pdf"
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{nom}"',
-            "X-ECF-Evaluations": str(rapport["evaluations"]),
-            "X-ECF-Tronquees": ",".join(str(n) for n in rapport["descriptions_tronquees"]),
-        },
+    entetes = {
+        "X-ECF-Evaluations": str(rapport["evaluations"]),
+        "X-ECF-Tronquees": ",".join(str(n) for n in rapport["descriptions_tronquees"]),
+    }
+
+    if format == "pdf":
+        entetes["Content-Disposition"] = f'attachment; filename="{nom}"'
+        return Response(content=pdf, media_type="application/pdf", headers=entetes)
+
+    # Format Airtable : le champ attachment attend [{url, filename}].
+    encode = _encoder_journal(log)
+    if len(encode) > URL_MAX:
+        raise HTTPException(
+            status_code=422,
+            detail=f"journal trop volumineux pour être transporté par URL "
+                   f"({len(encode)} caractères une fois compressé, maximum {URL_MAX})",
+        )
+    url = "{}/livret.pdf?{}".format(
+        _base_url(request), urlencode({"j": encode, "livret": livret, "nom": nom}, quote_via=quote)
     )
+    return JSONResponse(content=[{"url": url, "filename": nom}], headers=entetes)

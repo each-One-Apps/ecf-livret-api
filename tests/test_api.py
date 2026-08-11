@@ -14,14 +14,60 @@ def test_health():
     assert "TP-00520" in r.json()["livrets"]
 
 
-def test_appel_nominal_renvoie_un_pdf():
+def chemin_de(url):
+    return "/livret.pdf" + url.split("/livret.pdf", 1)[1]
+
+
+def test_appel_nominal_renvoie_le_format_attachment_airtable():
+    """Airtable télécharge ses pièces jointes : il lui faut une URL, pas des octets."""
     r = client.post("/update-ecf-assessment", json={"log": BLOC_REEL, "record_id": RECORD})
     assert r.status_code == 200
-    assert r.headers["content-type"] == "application/pdf"
-    assert r.content[:5] == b"%PDF-"
+    (piece,) = r.json()
+    assert set(piece) == {"url", "filename"}
+    assert piece["filename"] == f"livret_ecf_{RECORD}.pdf"
+    assert "/livret.pdf?" in piece["url"]
     assert r.headers["X-ECF-Evaluations"] == "1"
     assert r.headers["X-ECF-Tronquees"] == ""
+
+
+def test_l_url_renvoyee_produit_le_pdf():
+    r = client.post("/update-ecf-assessment", json={"log": BLOC_REEL, "record_id": RECORD})
+    g = client.get(chemin_de(r.json()[0]["url"]))
+    assert g.status_code == 200
+    assert g.headers["content-type"] == "application/pdf"
+    assert g.content[:5] == b"%PDF-"
+
+
+def test_l_url_reproduit_le_rendu_direct_a_l_octet_pres():
+    r = client.post("/update-ecf-assessment", json={"log": BLOC_REEL})
+    par_url = client.get(chemin_de(r.json()[0]["url"])).content
+    direct = client.post("/update-ecf-assessment?format=pdf", json={"log": BLOC_REEL}).content
+    assert par_url == direct
+
+
+def test_format_pdf_renvoie_toujours_le_binaire():
+    r = client.post(f"/update-ecf-assessment?format=pdf&record_id={RECORD}",
+                    json={"log": BLOC_REEL})
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:5] == b"%PDF-"
     assert RECORD in r.headers["content-disposition"]
+
+
+def test_url_illisible_en_400():
+    assert client.get("/livret.pdf?j=pas-du-tout-du-zlib").status_code == 400
+
+
+def test_journal_vide_dans_l_url_donne_le_livret_vierge():
+    g = client.get("/livret.pdf")
+    assert g.status_code == 200 and g.content[:5] == b"%PDF-"
+
+
+def test_l_url_refuse_aussi_un_livret_plein():
+    bloc = ("Date : 2026-08-11\nActivité : 1. X\nCompétences évaluées : 1\n"
+            "Description des compétences : Y")
+    r = client.post("/update-ecf-assessment?format=pdf",
+                    json={"log": "\n----------\n".join([bloc] * 6)})
+    assert r.status_code == 422
 
 
 def test_journal_vide_accepte():
@@ -61,9 +107,10 @@ def test_texte_brut_le_corps_est_le_journal():
         headers={"Content-Type": "text/plain; charset=utf-8"},
     )
     assert r.status_code == 200
-    assert r.content[:5] == b"%PDF-"
     assert r.headers["X-ECF-Evaluations"] == "1"
-    assert RECORD in r.headers["content-disposition"]
+    (piece,) = r.json()
+    assert piece["filename"] == f"livret_ecf_{RECORD}.pdf"
+    assert client.get(chemin_de(piece["url"])).content[:5] == b"%PDF-"
 
 
 def test_texte_brut_et_json_donnent_le_meme_fichier():
