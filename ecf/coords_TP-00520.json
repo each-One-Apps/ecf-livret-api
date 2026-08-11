@@ -314,7 +314,89 @@
             }
           ]
         }
-      ]
+      ],
+      "avis": {
+        "resultat": {
+          "satisfait": {
+            "page": 2,
+            "centre": [
+              52.8,
+              103.37
+            ],
+            "libelle": "Avoir satisfait aux critères issus des référentiels du titre professionnel attendus pour la réalisation de cette activité-type."
+          },
+          "non_satisfait": {
+            "page": 2,
+            "centre": [
+              52.8,
+              85.37
+            ],
+            "libelle": "Ne pas avoir satisfait aux critères issus des référentiels du titre professionnel."
+          }
+        },
+        "points_attention": {
+          "page": 3,
+          "cadre": [
+            45.5,
+            607.0,
+            549.5,
+            743.5
+          ]
+        },
+        "a_reevaluer": {
+          "page": 3,
+          "cadre": [
+            45.5,
+            327.0,
+            549.5,
+            548.5
+          ]
+        },
+        "formateurs": [
+          {
+            "page": 3,
+            "nom": [
+              91.3,
+              265.5,
+              251.5,
+              288.5
+            ],
+            "date": [
+              303.55,
+              265.5,
+              379.5,
+              288.5
+            ],
+            "visa": [
+              385.5,
+              265.5,
+              549.5,
+              288.5
+            ]
+          },
+          {
+            "page": 3,
+            "nom": [
+              91.3,
+              236.5,
+              251.5,
+              259.5
+            ],
+            "date": [
+              303.55,
+              236.5,
+              379.5,
+              259.5
+            ],
+            "visa": [
+              385.5,
+              236.5,
+              549.5,
+              259.5
+            ]
+          }
+        ]
+      }
     },
     "2": {
       "intitule": "Améliorer l’expérience client dans un environnement omnicanal",
@@ -625,7 +707,89 @@
             }
           ]
         }
-      ]
+      ],
+      "avis": {
+        "resultat": {
+          "satisfait": {
+            "page": 5,
+            "centre": [
+              52.8,
+              86.53
+            ],
+            "libelle": "Avoir satisfait aux critères issus des référentiels du titre professionnel attendus pour la réalisation de cette activité-type."
+          },
+          "non_satisfait": {
+            "page": 6,
+            "centre": [
+              52.8,
+              783.62
+            ],
+            "libelle": "Ne pas avoir satisfait aux critères issus des référentiels du titre professionnel."
+          }
+        },
+        "points_attention": {
+          "page": 6,
+          "cadre": [
+            45.5,
+            589.0,
+            549.5,
+            725.5
+          ]
+        },
+        "a_reevaluer": {
+          "page": 6,
+          "cadre": [
+            45.5,
+            309.0,
+            549.5,
+            530.5
+          ]
+        },
+        "formateurs": [
+          {
+            "page": 6,
+            "nom": [
+              91.3,
+              247.5,
+              251.5,
+              270.5
+            ],
+            "date": [
+              303.55,
+              247.5,
+              379.5,
+              270.5
+            ],
+            "visa": [
+              385.5,
+              247.5,
+              549.5,
+              270.5
+            ]
+          },
+          {
+            "page": 6,
+            "nom": [
+              91.3,
+              218.5,
+              251.5,
+              241.5
+            ],
+            "date": [
+              303.55,
+              218.5,
+              379.5,
+              241.5
+            ],
+            "visa": [
+              385.5,
+              218.5,
+              549.5,
+              241.5
+            ]
+          }
+        ]
+      }
     }
   }
 }

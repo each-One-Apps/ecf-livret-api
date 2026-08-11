@@ -28,6 +28,15 @@ RE_COMPLEMENTAIRE = re.compile(r"^[EÉ]valuations\s+compl[ée]mentaires", re.I)
 RE_COMPETENCE = re.compile(r"^(\d+)\.\s+(.+?)\s*$")
 RE_ENTETE_TABLEAU = re.compile(r"Description des [ée]valuations", re.I)
 
+# Avis final. « Ne pas avoir satisfait… » contient « avoir satisfait… » : la
+# négation doit être testée en premier, d'où l'alternance ordonnée.
+RE_SATISFAIT = re.compile(r"^☐?\s*(Ne pas avoir|Avoir)\s+satisfait", re.I)
+RE_FORMATEURS = re.compile(r"^Formateur\(s\)", re.I)
+BLOCS_TEXTE_AVIS = (
+    ("points_attention", re.compile(r"^Si le candidat", re.I), 150.0),
+    ("a_reevaluer", re.compile(r"^Comp[ée]tences\s+à\s+r[ée][ée]valuer", re.I), 240.0),
+)
+
 PAD = 3.0  # marge intérieure des cellules texte, en points
 
 
@@ -178,6 +187,121 @@ def extraire_tableau(page, nb_competences, etiquette):
     return lignes
 
 
+def _filets_larges(page, au_dessus_de=0.0):
+    return sorted(
+        {round(e["top"], 1) for e in page.edges
+         if e["orientation"] == "h" and e["x0"] < 50 and (e["x1"] - e["x0"]) > 150
+         and e["top"] > au_dessus_de}
+    )
+
+
+def _cadre_sous(page, ancre_top, hauteur_max, etiquette, quoi):
+    """Cadre de saisie ouvert par le filet situé juste sous une ancre textuelle."""
+    filets = _filets_larges(page, ancre_top)
+    if not filets:
+        raise SystemExit(f"{etiquette} : aucun filet sous « {quoi} »")
+    haut = filets[0]
+
+    # Le cadre est fermé par ses montants verticaux : ce sont eux qui donnent
+    # sa hauteur réelle et sa largeur, pas le filet horizontal suivant.
+    montants = [e for e in page.edges
+                if e["orientation"] == "v" and 30 < e["x0"] < 570
+                and abs(e["top"] - haut) < 6 and (e["bottom"] - e["top"]) > 30]
+    if len(montants) < 2:
+        raise SystemExit(f"{etiquette} : montants du cadre « {quoi} » introuvables")
+
+    bas = min(max(e["bottom"] for e in montants), haut + hauteur_max)
+    cotes = sorted({round(e["x0"], 1) for e in montants})
+    return haut, bas, cotes[0], cotes[-1]
+
+
+def extraire_avis(pages, page_fiche, page_suite, etiquette):
+    """Zones de l'avis final : cases résultat, textes libres, tableau formateurs.
+
+    Le résultat de l'activité 2 est à cheval sur deux pages (« Avoir satisfait »
+    en bas de la fiche, « Ne pas avoir satisfait » en haut de la suivante) : on
+    cherche donc chaque case sur les deux pages plutôt que de le supposer.
+    """
+    avis = {"resultat": {}}
+
+    for idx in (page_fiche, page_suite):
+        page = pages[idx]
+        hauteur = page.height
+        lignes = page.extract_text_lines()
+        for case in [c for c in page.chars if c["text"] == "☐" and c["x0"] < 100]:
+            proche = [l for l in lignes if l["top"] - 4 <= case["top"] <= l["bottom"] + 4]
+            if not proche:
+                continue
+            libelle = proche[0]["text"].lstrip("☐ ").strip()
+            m = RE_SATISFAIT.match(libelle)
+            if not m:
+                continue
+            cle = "non_satisfait" if m.group(1).lower().startswith("ne pas") else "satisfait"
+            avis["resultat"][cle] = {
+                "page": idx,
+                "centre": [round((case["x0"] + case["x1"]) / 2, 2),
+                           round(hauteur - (case["top"] + case["bottom"]) / 2, 2)],
+                "libelle": libelle,
+            }
+
+    manquantes = [c for c in ("satisfait", "non_satisfait") if c not in avis["resultat"]]
+    if manquantes:
+        raise SystemExit(f"{etiquette} : cases résultat {manquantes} introuvables")
+
+    # Textes libres et tableau formateurs vivent sur la page qui suit la fiche.
+    page = pages[page_suite]
+    hauteur = page.height
+    lignes = page.extract_text_lines()
+
+    for cle, motif, hauteur_max in BLOCS_TEXTE_AVIS:
+        ancre = next((l for l in lignes if motif.match(l["text"].strip())), None)
+        if ancre is None:
+            raise SystemExit(f"{etiquette} : bloc « {cle} » introuvable")
+        haut, bas, x0, x1 = _cadre_sous(page, ancre["top"], hauteur_max, etiquette, cle)
+        avis[cle] = {
+            "page": page_suite,
+            "cadre": [round(x0 + PAD, 2), round(hauteur - (bas - PAD), 2),
+                      round(x1 - PAD, 2), round(hauteur - (haut + PAD), 2)],
+        }
+
+    ancre = next((l for l in lignes if RE_FORMATEURS.match(l["text"].strip())), None)
+    if ancre is None:
+        raise SystemExit(f"{etiquette} : tableau formateurs introuvable")
+    filets_h = _filets_larges(page, ancre["top"])[:3]
+    if len(filets_h) < 3:
+        raise SystemExit(f"{etiquette} : tableau formateurs incomplet ({filets_h})")
+    colonnes = sorted(
+        {round(e["x0"], 1) for e in page.edges
+         if e["orientation"] == "v" and 30 < e["x0"] < 570
+         and e["top"] <= filets_h[0] + 5 and e["bottom"] >= filets_h[-1] - 5}
+    )
+    if len(colonnes) < 4:
+        raise SystemExit(f"{etiquette} : colonnes du tableau formateurs : {colonnes}")
+
+    mots = page.extract_words()
+
+    def apres_libelle(x_gauche, x_droite, haut, bas):
+        """Démarre le texte à droite du « Nom » / « Date » imprimé dans la cellule."""
+        dedans = [w for w in mots
+                  if x_gauche <= w["x0"] < x_droite and haut <= w["top"] < bas]
+        return (max(w["x1"] for w in dedans) + 6.0) if dedans else (x_gauche + PAD)
+
+    avis["formateurs"] = []
+    for i in range(2):
+        haut, bas = filets_h[i], filets_h[i + 1]
+        y_bas, y_haut = hauteur - (bas - PAD), hauteur - (haut + PAD)
+        avis["formateurs"].append({
+            "page": page_suite,
+            "nom": [round(apres_libelle(colonnes[0], colonnes[1], haut, bas), 2),
+                    round(y_bas, 2), round(colonnes[1] - PAD, 2), round(y_haut, 2)],
+            "date": [round(apres_libelle(colonnes[1], colonnes[2], haut, bas), 2),
+                     round(y_bas, 2), round(colonnes[2] - PAD, 2), round(y_haut, 2)],
+            "visa": [round(colonnes[2] + PAD, 2), round(y_bas, 2),
+                     round(colonnes[3] - PAD, 2), round(y_haut, 2)],
+        })
+    return avis
+
+
 def main(chemin_pdf, chemin_sortie):
     with open(chemin_pdf, "rb") as f:
         empreinte = hashlib.sha256(f.read()).hexdigest()
@@ -222,6 +346,9 @@ def main(chemin_pdf, chemin_sortie):
                 "intitule": intitule,
                 "competences": {str(k): v for k, v in sorted(competences.items())},
                 "blocs": blocs,
+                "avis": extraire_avis(
+                    pages, idx, idx + 1, f"activité {numero} avis (p.{idx + 2})"
+                ),
             }
 
         donnees = {

@@ -10,7 +10,7 @@ import os
 from functools import lru_cache
 
 from .parser import ecrire_journal, lire_journal
-from .render import LivretPlein, rendre
+from .render import LivretPlein, SignatureIntrouvable, rendre
 
 DOSSIER = os.path.dirname(__file__)
 DEFAUT = "TP-00520"
@@ -77,7 +77,7 @@ def _sans_doublons(evaluations):
 def construire(journal, code=DEFAUT):
     """journal brut -> (pdf, rapport). Lève JournalInvalide / LivretPlein / ValueError."""
     template, coords = charger(code)
-    evaluations = lire_journal(journal)
+    evaluations, avis = lire_journal(journal)
     evaluations, doublons = _sans_doublons(evaluations)
 
     # L'ordre du journal n'est pas garanti — l'émetteur peut renvoyer l'historique
@@ -85,7 +85,7 @@ def construire(journal, code=DEFAUT):
     # deux évaluations du même jour gardent leur ordre d'arrivée.
     evaluations.sort(key=_cle_chronologique)
 
-    pdf, tronquees = rendre(template, coords, evaluations, BLOCS_AUTORISES)
+    pdf, tronquees = rendre(template, coords, evaluations, BLOCS_AUTORISES, avis)
 
     par_activite = {}
     for ev in evaluations:
@@ -98,8 +98,9 @@ def construire(journal, code=DEFAUT):
         "descriptions_tronquees": tronquees,
         "doublons_ignores": doublons,
         # Journal canonique à réécrire à la source : dédoublonné et trié.
-        "journal": ecrire_journal(evaluations),
+        "avis": len(avis),
+        "journal": ecrire_journal(evaluations, avis),
     }
 
 
-__all__ = ["construire", "charger", "codes_disponibles", "LivretInconnu", "LivretPlein"]
+__all__ = ["construire", "charger", "codes_disponibles", "LivretInconnu", "LivretPlein", "SignatureIntrouvable"]

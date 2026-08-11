@@ -33,7 +33,7 @@ from fastapi.responses import JSONResponse, Response
 
 from ecf.livret import DEFAUT, LivretInconnu, codes_disponibles, construire
 from ecf.parser import JournalInvalide
-from ecf.render import LivretPlein
+from ecf.render import LivretPlein, SignatureIntrouvable
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("ecf")
@@ -107,6 +107,10 @@ def livret_pdf(j: str = "", livret: str = DEFAUT, nom: str = "livret_ecf.pdf"):
         pdf, _ = construire(journal, livret)
     except LivretInconnu as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except SignatureIntrouvable as e:
+        # 502 : la demande est bonne, c'est une dépendance externe qui manque.
+        logger.error("%s — signature injoignable : %s", nom, e)
+        raise HTTPException(status_code=502, detail=str(e))
     except (JournalInvalide, LivretPlein, ValueError) as e:
         raise HTTPException(status_code=422, detail=str(e))
     return Response(
@@ -128,6 +132,10 @@ async def update_ecf_assessment(
     except LivretInconnu as e:
         logger.warning("%s — livret inconnu : %s", ref, e)
         raise HTTPException(status_code=404, detail=str(e))
+    except SignatureIntrouvable as e:
+        # 502 : la demande est bonne, c'est une dépendance externe qui manque.
+        logger.error("%s — signature injoignable : %s", ref, e)
+        raise HTTPException(status_code=502, detail=str(e))
     except (JournalInvalide, LivretPlein, ValueError) as e:
         # 422 : la demande est bien formée mais son contenu est refusé.
         # stopOnHttpError côté Make empêche alors toute écriture dans Airtable.
@@ -153,6 +161,7 @@ async def update_ecf_assessment(
         )
     entetes = {
         "X-ECF-Evaluations": str(rapport["evaluations"]),
+        "X-ECF-Avis": str(rapport["avis"]),
         "X-ECF-Tronquees": ",".join(str(n) for n in rapport["descriptions_tronquees"]),
         "X-ECF-Doublons": ",".join(str(n) for n in rapport["doublons_ignores"]),
     }
@@ -182,6 +191,7 @@ async def update_ecf_assessment(
             # de grossir quand l'émetteur renvoie son historique complet.
             "journal": rapport["journal"],
             "evaluations": rapport["evaluations"],
+            "avis": rapport["avis"],
             "doublons_ignores": rapport["doublons_ignores"],
         },
         headers=entetes,

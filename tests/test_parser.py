@@ -2,6 +2,11 @@ import pytest
 
 from ecf.parser import JournalInvalide, concatener, lire_journal
 
+
+def lire_evaluations(journal):
+    """lire_journal renvoie (évaluations, avis) ; ici seules les évaluations comptent."""
+    return lire_journal(journal)[0]
+
 # Bloc recopié tel quel de la sortie du webhook Make (exécution du 2026-08-11),
 # espaces de fin de ligne compris.
 BLOC_REEL = (
@@ -15,7 +20,7 @@ BLOC_REEL = (
 
 
 def test_bloc_reel_du_webhook():
-    (ev,) = lire_journal(BLOC_REEL)
+    (ev,) = lire_evaluations(BLOC_REEL)
     assert ev["activite"] == 1
     assert ev["date"] == "11/08/2026"
     assert ev["competences"] == [1, 3]
@@ -23,9 +28,9 @@ def test_bloc_reel_du_webhook():
 
 
 def test_journal_vide():
-    assert lire_journal("") == []
-    assert lire_journal("   \n  ") == []
-    assert lire_journal("----------\n----------") == []
+    assert lire_evaluations("") == []
+    assert lire_evaluations("   \n  ") == []
+    assert lire_evaluations("----------\n----------") == []
 
 
 def test_deux_blocs_et_activite_2():
@@ -36,7 +41,7 @@ def test_deux_blocs_et_activite_2():
         "Compétences évaluées : 4\n"
         "Description des compétences : Entretien de vente filmé",
     )
-    evs = lire_journal(journal)
+    evs = lire_evaluations(journal)
     assert [e["activite"] for e in evs] == [1, 2]
     assert evs[1]["competences"] == [4]
 
@@ -50,7 +55,7 @@ def test_description_multiligne():
         "puis une deuxième\n"
         "et une troisième"
     )
-    (ev,) = lire_journal(journal)
+    (ev,) = lire_evaluations(journal)
     assert ev["description"] == "Première ligne puis une deuxième et une troisième"
 
 
@@ -61,7 +66,7 @@ def test_ordre_des_libelles_indifferent():
         "Compétences évaluées : 1 et 3\n"
         "Date : 2026-01-05"
     )
-    (ev,) = lire_journal(journal)
+    (ev,) = lire_evaluations(journal)
     assert (ev["activite"], ev["date"], ev["competences"]) == (2, "05/01/2026", [1, 3])
 
 
@@ -70,7 +75,7 @@ def test_competences_dedoublonnees():
         "Date : 2026-08-11\nActivité : 1. X\n"
         "Compétences évaluées : 3, 1, 3\nDescription des compétences : Y"
     )
-    (ev,) = lire_journal(journal)
+    (ev,) = lire_evaluations(journal)
     assert ev["competences"] == [3, 1]
 
 
@@ -123,7 +128,7 @@ def test_des_blocs_ecf_colles_sur_une_reflexion_afest_sont_refuses():
 def test_separateur_normalise_par_le_rich_text():
     """Airtable stocke ce champ en markdown : `----------` peut revenir en `---`."""
     journal = concatener(BLOC_REEL, BLOC_REEL).replace("----------", "---")
-    assert len(lire_journal(journal)) == 2
+    assert len(lire_evaluations(journal)) == 2
 
 
 def test_le_rang_signale_est_celui_du_bloc_fautif():

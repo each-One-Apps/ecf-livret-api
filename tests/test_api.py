@@ -160,7 +160,7 @@ def test_deux_appels_identiques_donnent_le_meme_fichier():
 
 def test_le_journal_renvoye_est_dedoublonne_et_trie():
     """C'est ce texte que l'appelant réécrit : sans lui, son champ grossit sans fin."""
-    from ecf.parser import lire_journal
+    from tests.test_parser import lire_evaluations
     bloc = lambda j, d: (f"Date : 2026-08-{j}\nActivité : 1. Peu importe\n"
                          f"Compétences évaluées : 1\nDescription des compétences : {d}")
     envoye = "\n----------\n".join([bloc("13", "Tardive"), bloc("11", "Ancienne"),
@@ -168,7 +168,7 @@ def test_le_journal_renvoye_est_dedoublonne_et_trie():
     r = client.post("/update-ecf-assessment", json={"log": envoye})
     corps = r.json()
     assert corps["evaluations"] == 2 and corps["doublons_ignores"] == [3]
-    relu = lire_journal(corps["journal"])
+    relu = lire_evaluations(corps["journal"])
     assert [e["date"] for e in relu] == ["11/08/2026", "13/08/2026"]
 
 

@@ -37,12 +37,30 @@ RE_LIBELLE = re.compile(
 RE_ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
 RE_FR = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 
+# Second type de bloc : l'avis final d'une activité-type. Reconnaissable à sa
+# première ligne, qui n'existe pas dans un bloc d'évaluation.
+RE_LIBELLE_AVIS = re.compile(
+    r"^[ \t]*(?:"
+    r"(?P<activite>avis\s+activit[ée])"
+    r"|(?P<resultat>r[ée]sultat)"
+    r"|(?P<points_attention>points?\s+d['’]attention)"
+    r"|(?P<a_reevaluer>comp[ée]tences\s+à\s+r[ée][ée]valuer)"
+    r"|(?P<formateur_1>formateur\s*1)"
+    r"|(?P<formateur_2>formateur\s*2)"
+    r"|(?P<date>date\s+de\s+l['’]avis)"
+    r"|(?P<signature_1>signature\s*1)"
+    r"|(?P<signature_2>signature\s*2)"
+    r")[ \t]*:[ \t]*",
+    re.I | re.M,
+)
+RE_EST_AVIS = re.compile(r"^[ \t]*avis\s+activit[ée][ \t]*:", re.I | re.M)
+
 
 class JournalInvalide(ValueError):
     """Le journal ne peut pas être lu — on refuse plutôt que de deviner."""
 
 
-def _champs(bloc, rang):
+def _champs(bloc, rang, regle=None):
     """Découpe un bloc en {clé: valeur} d'après ses libellés.
 
     Un libellé qui revient deux fois signale deux blocs collés faute de
@@ -50,7 +68,7 @@ def _champs(bloc, rang):
     contrôle, la seconde valeur écrase la première et une évaluation
     disparaîtrait sans un mot.
     """
-    trouves = list(RE_LIBELLE.finditer(bloc))
+    trouves = list((regle or RE_LIBELLE).finditer(bloc))
     champs = {}
     for i, m in enumerate(trouves):
         cle = m.lastgroup
@@ -98,19 +116,65 @@ def _competences(valeur, rang):
     return vues
 
 
+def _lire_avis(bloc, rang):
+    """Bloc « Avis activité » -> dict, ou None s'il n'est pas encore rempli.
+
+    Tant que le formateur n'a pas tranché, le résultat est vide : le bloc
+    arrive quand même mais il n'y a rien à dessiner. On l'ignore plutôt que de
+    le refuser — un avis se remplit après les évaluations, pas en même temps.
+    """
+    champs = _champs(bloc, rang, RE_LIBELLE_AVIS)
+    numero = _numero_activite_libre(champs.get("activite", ""), rang)
+    if not champs.get("resultat"):
+        return None
+
+    avis = {
+        "activite": numero,
+        "resultat": " ".join(champs["resultat"].split()),
+        "points_attention": " ".join(champs.get("points_attention", "").split()),
+        "a_reevaluer": " ".join(champs.get("a_reevaluer", "").split()),
+        "formateurs": [],
+    }
+    date = champs.get("date", "").strip()
+    avis["date"] = _date(date, rang) if date else ""
+    for i in ("1", "2"):
+        avis["formateurs"].append({
+            "nom": " ".join(champs.get(f"formateur_{i}", "").split()),
+            "signature": champs.get(f"signature_{i}", "").strip(),
+        })
+    return avis
+
+
+def _numero_activite_libre(valeur, rang):
+    """« Activité-type 1 », « 1. Contribuer… » ou « 1 » -> 1."""
+    m = re.search(r"(\d+)", valeur or "")
+    if not m:
+        raise JournalInvalide(
+            f"avis {rang} : impossible de déterminer l'activité depuis « {valeur[:60]} »"
+        )
+    return int(m.group(1))
+
+
 def lire_journal(journal):
-    """Journal brut -> liste ordonnée d'évaluations.
+    """Journal brut -> (évaluations, avis).
 
     Les blocs vides sont ignorés : la concaténation côté Make peut en produire
     quand une seule des deux activités est renseignée.
     """
     if not journal or not journal.strip():
-        return []
+        return [], []
 
-    evaluations = []
+    evaluations, avis = [], []
     for bloc in SEPARATEUR.split(journal):
         if not bloc.strip():
             continue
+
+        if RE_EST_AVIS.search(bloc):
+            lu = _lire_avis(bloc, len(avis) + 1)
+            if lu:
+                avis.append(lu)
+            continue
+
         rang = len(evaluations) + 1
         champs = _champs(bloc, rang)
 
@@ -127,10 +191,10 @@ def lire_journal(journal):
             "competences": _competences(champs["competences"], rang),
             "description": " ".join(champs["description"].split()),
         })
-    return evaluations
+    return evaluations, avis
 
 
-def ecrire_journal(evaluations):
+def ecrire_journal(evaluations, avis=()):
     """Évaluations -> journal canonique, au même format que l'entrée.
 
     C'est ce texte que l'appelant réécrit dans son champ : dédoublonné, trié,
@@ -149,6 +213,24 @@ def ecrire_journal(evaluations):
                 intitule=ev["intitule"],
                 competences=", ".join(str(n) for n in ev["competences"]),
                 description=ev["description"],
+            )
+        )
+    for a in avis:
+        blocs.append(
+            "Avis activité : {activite}\n"
+            "Résultat : {resultat}\n"
+            "Points d'attention : {points_attention}\n"
+            "Compétences à réévaluer : {a_reevaluer}\n"
+            "Formateur 1 : {n1}\n"
+            "Formateur 2 : {n2}\n"
+            "Date de l'avis : {date}\n"
+            "Signature 1 : {s1}\n"
+            "Signature 2 : {s2}\n"
+            "----------".format(
+                activite=a["activite"], resultat=a["resultat"],
+                points_attention=a["points_attention"], a_reevaluer=a["a_reevaluer"],
+                date=a["date"], n1=a["formateurs"][0]["nom"], n2=a["formateurs"][1]["nom"],
+                s1=a["formateurs"][0]["signature"], s2=a["formateurs"][1]["signature"],
             )
         )
     return "\n".join(blocs) + ("\n" if blocs else "")
