@@ -11,6 +11,17 @@ dépôt-là redéploie le service dont dépend le scénario Make `Generate APNI 
 Subscription File` (6643033)**. Une erreur qui passe le build mais casse au démarrage
 emporterait les deux endpoints. Ici, l'ECF ne peut pas faire tomber l'APNI.
 
+## Pourquoi ce dépôt est public
+
+Ce n'est pas un choix d'ouverture : c'est une contrainte du plan Vercel **Hobby**, qui refuse
+de lier un dépôt **privé d'organisation** (`409`) et donc de déployer automatiquement sur push.
+Le dépôt repassera en privé au passage en plan Pro.
+
+En conséquence, rien d'interne ne doit entrer ici : ni clé, ni identifiant de base, ni donnée
+d'apprenant. Le service est **sans état et sans secret** — il reçoit un journal, il renvoie un
+PDF — ce qui rend la chose tenable. Les jeux de test utilisent des valeurs fictives de la même
+forme que les vraies.
+
 ## Le principe : on ne rature pas, on recopie au propre
 
 Le livret n'est **jamais modifié incrémentalement**. À chaque appel, le service repart du
