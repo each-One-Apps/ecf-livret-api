@@ -74,11 +74,31 @@ def _sans_doublons(evaluations):
     return gardees, doublons
 
 
+def _dernier_avis_par_activite(avis):
+    """Un seul avis final par activité-type : le dernier reçu l'emporte.
+
+    Refaire son avis doit corriger le précédent, pas s'y ajouter — sans quoi les
+    deux seraient dessinés au même endroit, deux cases cochées et deux signatures
+    empilées.
+
+    C'est l'ordre d'arrivée qui tranche, pas la date saisie : un avis refait le
+    jour même porterait la même date, et le nouveau bloc est toujours ajouté en
+    fin de journal.
+    """
+    retenu, remplaces = {}, []
+    for a in avis:
+        if a["activite"] in retenu:
+            remplaces.append(a["activite"])
+        retenu[a["activite"]] = a
+    return [retenu[k] for k in sorted(retenu)], remplaces
+
+
 def construire(journal, code=DEFAUT):
     """journal brut -> (pdf, rapport). Lève JournalInvalide / LivretPlein / ValueError."""
     template, coords = charger(code)
     evaluations, avis = lire_journal(journal)
     evaluations, doublons = _sans_doublons(evaluations)
+    avis, avis_remplaces = _dernier_avis_par_activite(avis)
 
     # L'ordre du journal n'est pas garanti — l'émetteur peut renvoyer l'historique
     # dans son propre ordre. Le livret, lui, se lit chronologiquement. Tri stable :
@@ -99,6 +119,7 @@ def construire(journal, code=DEFAUT):
         "doublons_ignores": doublons,
         # Journal canonique à réécrire à la source : dédoublonné et trié.
         "avis": len(avis),
+        "avis_remplaces": avis_remplaces,
         "journal": ecrire_journal(evaluations, avis),
     }
 

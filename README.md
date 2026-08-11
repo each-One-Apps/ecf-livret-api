@@ -174,6 +174,20 @@ activité 2 : 4 compétences | princ p.6 = 5 lignes, compl p.8 = 4 lignes | capa
 ⚠️ Le service ne sait pas **quel livret appliquer à quel apprenant** : c'est à l'appelant de
 passer `livret`. La règle d'aiguillage reste à définir.
 
+## Corriger
+
+Le journal est l'original, le PDF n'en est qu'une projection : on corrige le journal, jamais le
+document.
+
+**L'avis final se refait.** Il n'y en a qu'un par activité-type : si l'appelant en renvoie un
+second, il **remplace** le précédent. C'est l'ordre d'arrivée qui tranche, pas la date saisie —
+un avis refait le jour même porterait la même date. Le remplacement est signalé par l'en-tête
+`X-ECF-Avis-Remplaces` et dans les logs.
+
+⚠️ **Ne pas rejouer un appel ancien** si l'appelant compose son journal avec l'existant : il
+réinjecterait la version périmée à côté de la corrigée. Pour régénérer, renvoyer le journal
+courant seul.
+
 ## Capacité
 
 5 lignes par activité (la fiche principale). Au-delà, `422`.

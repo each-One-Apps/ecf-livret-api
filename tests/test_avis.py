@@ -186,3 +186,32 @@ def test_avis_rempli_sans_activite_refuse():
     with pytest.raises(ValueError) as e:
         construire(bancal)
     assert "activité introuvable" in str(e.value)
+
+
+def test_refaire_un_avis_remplace_le_precedent():
+    """Il n'y a qu'un avis final par activité : le dernier reçu gagne."""
+    journal = avis(resultat=SATISFAIT, f1="Premier") + "\n" \
+        + avis(resultat=NON_SATISFAIT, f1="Second")
+    pdf, rapport = construire(journal)
+    assert rapport["avis"] == 1
+    assert rapport["avis_remplaces"] == [1]
+    # C'est bien le SECOND qui est dessiné, pas le premier.
+    assert case_cochee(pdf, 1) == "non_satisfait"
+    page = texte(pdf, 3)
+    assert "Second" in page and "Premier" not in page
+
+
+def test_le_journal_ne_conserve_que_l_avis_retenu():
+    from ecf.parser import lire_journal
+
+    journal = avis(f1="Premier") + "\n" + avis(f1="Second")
+    _, rapport = construire(journal)
+    _, relus = lire_journal(rapport["journal"])
+    assert len(relus) == 1
+    assert relus[0]["formateurs"][0]["nom"] == "Second"
+
+
+def test_un_avis_par_activite_coexistent():
+    journal = avis(activite=1, f1="Un") + "\n" + avis(activite=2, f1="Deux")
+    _, rapport = construire(journal)
+    assert rapport["avis"] == 2 and rapport["avis_remplaces"] == []
