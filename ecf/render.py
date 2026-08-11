@@ -24,6 +24,13 @@ CORPS_MIN = 6.5
 ENCRE = (0.06, 0.06, 0.35)  # même bleu que le remplissage APNI
 DELAI_SIGNATURE = 15  # secondes
 
+# Correspondance EXACTE, jamais par préfixe ni par inclusion : « Femme »
+# contient « mme », et un test approximatif cocherait « Mme » pour les deux.
+CIVILITES = {
+    "mme": {"mme", "madame", "femme", "f"},
+    "m": {"m", "mr", "monsieur", "homme", "h"},
+}
+
 
 class SignatureIntrouvable(Exception):
     """Une signature n'a pas pu être récupérée.
@@ -247,10 +254,12 @@ def _dessine_garde(c_par_page, coords, candidat, libelles):
 
     civilite = _normalise(candidat.get("civilite", ""))
     if civilite:
-        cle = "mme" if civilite.startswith("mme") else "m" if civilite in ("m", "mr", "monsieur") else None
+        cle = next((k for k, valeurs in CIVILITES.items() if civilite in valeurs), None)
         if cle is None:
+            acceptees = ", ".join(sorted(v for s in CIVILITES.values() for v in s))
             raise ValueError(
-                f"civilité « {candidat['civilite'][:20]} » non reconnue (Mme ou M. attendu)"
+                f"civilité « {candidat['civilite'][:20]} » non reconnue "
+                f"(acceptées : {acceptees})"
             )
         c_par_page.setdefault(0, []).append(("croix", garde["civilite"][cle]))
 

@@ -143,3 +143,25 @@ def test_la_date_de_naissance_est_mise_au_format_francais():
     pdf, rapport = construire(CANDIDAT.replace("14/03/1998", "1991-09-05"))
     assert rapport["candidat"]["naissance"] == "05/09/1991"
     assert "05/09/1991" in texte(pdf)
+
+
+@pytest.mark.parametrize("saisie, attendue", [
+    ("Mme", "mme"), ("Madame", "mme"), ("Femme", "mme"), ("F", "mme"),
+    ("M.", "m"), ("M", "m"), ("Monsieur", "m"), ("Homme", "m"), ("H", "m"),
+])
+def test_les_libelles_de_civilite_acceptes(saisie, attendue):
+    """« Femme » contient « mme » : un test par préfixe cocherait la mauvaise case."""
+    import pdfplumber
+
+    from ecf.livret import charger
+
+    _, coords, _ = charger("TP-00520")
+    cases = coords["garde"]["civilite"]
+    pdf, _ = construire(CANDIDAT.replace("Civilité : Mme", f"Civilité : {saisie}"))
+    with pdfplumber.open(io.BytesIO(pdf)) as doc:
+        p = doc.pages[0]
+        cochees = [cle for cle, (x, y) in cases.items()
+                   if [l for l in p.lines
+                       if abs((l["x0"] + l["x1"]) / 2 - x) < 6
+                       and abs((l["top"] + l["bottom"]) / 2 - (p.height - y)) < 6]]
+    assert cochees == [attendue], (saisie, cochees)

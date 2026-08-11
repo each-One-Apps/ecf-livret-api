@@ -196,8 +196,10 @@ Lieu de formation : Paris 18e
 ----------
 ```
 
-La civilité coche la case correspondante ; une valeur autre que Mme ou M. est refusée plutôt
-que devinée. Le bloc peut arriver partiellement rempli : seuls les champs fournis sont écrits.
+La civilité coche la case correspondante. Sont acceptés `Mme` / `Madame` / `Femme` / `F` et
+`M.` / `Monsieur` / `Homme` / `H`, par correspondance **exacte** — « Femme » contient « mme »,
+un test par préfixe cocherait la mauvaise case. Toute autre valeur est refusée plutôt que
+devinée. Le bloc peut arriver partiellement rempli : seuls les champs fournis sont écrits.
 
 ## Corriger
 
