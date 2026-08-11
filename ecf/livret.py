@@ -48,10 +48,43 @@ def charger(code):
     return template, coords
 
 
+def _cle_chronologique(ev):
+    """JJ/MM/AAAA -> clé triable. Une date illisible n'arrive pas ici : le
+    parseur l'a déjà refusée."""
+    jour, mois, annee = ev["date"].split("/")
+    return (annee, mois, jour)
+
+
+def _sans_doublons(evaluations):
+    """Retire les blocs strictement identiques et dit lesquels.
+
+    L'émetteur peut renvoyer l'historique complet à chaque soumission : deux
+    blocs identiques en tout point sont alors un renvoi, pas deux évaluations.
+    Le rapport les signale — sur un document de jury, rien ne disparaît en
+    silence.
+    """
+    vues, gardees, doublons = set(), [], []
+    for rang, ev in enumerate(evaluations, 1):
+        empreinte = (ev["activite"], ev["date"], tuple(ev["competences"]), ev["description"])
+        if empreinte in vues:
+            doublons.append(rang)
+            continue
+        vues.add(empreinte)
+        gardees.append(ev)
+    return gardees, doublons
+
+
 def construire(journal, code=DEFAUT):
     """journal brut -> (pdf, rapport). Lève JournalInvalide / LivretPlein / ValueError."""
     template, coords = charger(code)
     evaluations = lire_journal(journal)
+    evaluations, doublons = _sans_doublons(evaluations)
+
+    # L'ordre du journal n'est pas garanti — l'émetteur peut renvoyer l'historique
+    # dans son propre ordre. Le livret, lui, se lit chronologiquement. Tri stable :
+    # deux évaluations du même jour gardent leur ordre d'arrivée.
+    evaluations.sort(key=_cle_chronologique)
+
     pdf, tronquees = rendre(template, coords, evaluations, BLOCS_AUTORISES)
 
     par_activite = {}
@@ -63,6 +96,7 @@ def construire(journal, code=DEFAUT):
         "evaluations": len(evaluations),
         "par_activite": par_activite,
         "descriptions_tronquees": tronquees,
+        "doublons_ignores": doublons,
     }
 
 

@@ -146,9 +146,15 @@ async def update_ecf_assessment(
 
     nom = f"livret_ecf_{record_id}.pdf" if RE_RECORD.match(record_id or "") \
         else "livret_ecf.pdf"
+    if rapport["doublons_ignores"]:
+        logger.info(
+            "%s — blocs %s identiques à un précédent, ignorés",
+            ref, rapport["doublons_ignores"],
+        )
     entetes = {
         "X-ECF-Evaluations": str(rapport["evaluations"]),
         "X-ECF-Tronquees": ",".join(str(n) for n in rapport["descriptions_tronquees"]),
+        "X-ECF-Doublons": ",".join(str(n) for n in rapport["doublons_ignores"]),
     }
 
     if format == "pdf":

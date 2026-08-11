@@ -63,10 +63,7 @@ def test_journal_vide_dans_l_url_donne_le_livret_vierge():
 
 
 def test_l_url_refuse_aussi_un_livret_plein():
-    bloc = ("Date : 2026-08-11\nActivité : 1. X\nCompétences évaluées : 1\n"
-            "Description des compétences : Y")
-    r = client.post("/update-ecf-assessment?format=pdf",
-                    json={"log": "\n----------\n".join([bloc] * 6)})
+    r = client.post("/update-ecf-assessment?format=pdf", json={"log": six_evaluations()})
     assert r.status_code == 422
 
 
@@ -85,11 +82,17 @@ def test_journal_illisible_refuse_en_422():
     assert "illisible" in r.json()["detail"]
 
 
+def six_evaluations():
+    """Six blocs DISTINCTS : des blocs identiques seraient dédoublonnés."""
+    return "\n----------\n".join(
+        f"Date : 2026-08-{10 + i:02d}\nActivité : 1. X\n"
+        f"Compétences évaluées : 1\nDescription des compétences : Évaluation {i}"
+        for i in range(1, 7)
+    )
+
+
 def test_livret_plein_refuse_en_422():
-    bloc = ("Date : 2026-08-11\nActivité : 1. X\nCompétences évaluées : 1\n"
-            "Description des compétences : Y")
-    r = client.post("/update-ecf-assessment",
-                    json={"log": "\n----------\n".join([bloc] * 6)})
+    r = client.post("/update-ecf-assessment", json={"log": six_evaluations()})
     assert r.status_code == 422
     assert "5 lignes" in r.json()["detail"]
 
@@ -137,10 +140,7 @@ def test_texte_brut_avec_description_multiligne():
 
 
 def test_texte_brut_refuse_aussi_le_livret_plein():
-    bloc = ("Date : 2026-08-11\nActivité : 1. X\nCompétences évaluées : 1\n"
-            "Description des compétences : Y")
-    r = client.post("/update-ecf-assessment",
-                    content="\n----------\n".join([bloc] * 6).encode("utf-8"),
+    r = client.post("/update-ecf-assessment", content=six_evaluations().encode("utf-8"),
                     headers={"Content-Type": "text/plain"})
     assert r.status_code == 422
 

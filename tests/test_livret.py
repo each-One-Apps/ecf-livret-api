@@ -94,14 +94,14 @@ def test_un_bloc_de_plus_ne_deplace_pas_les_precedents():
 
 
 def test_sixieme_evaluation_refusee():
-    j = journal(*[bloc(1, 10 + i, "1") for i in range(1, 7)])
+    j = journal(*[bloc(1, 10 + i, "1", f"Évaluation {i}") for i in range(1, 7)])
     with pytest.raises(LivretPlein) as e:
         construire(j)
     assert "6e évaluation" in str(e.value) and "5 lignes" in str(e.value)
 
 
 def test_cinq_par_activite_est_accepte():
-    j = journal(*[bloc(a, 10 + i, "1") for a in (1, 2) for i in range(1, 6)])
+    j = journal(*[bloc(a, 10 + i, "1", f"Éval {a}-{i}") for a in (1, 2) for i in range(1, 6)])
     _, rapport = construire(j)
     assert rapport["par_activite"] == {1: 5, 2: 5}
 
@@ -128,3 +128,31 @@ def test_livret_inconnu():
 
     with pytest.raises(LivretInconnu):
         construire("", "TP-99999")
+
+
+def test_les_doublons_stricts_sont_ignores_et_signales():
+    """L'émetteur renvoie l'historique complet : un bloc identique est un renvoi."""
+    b = bloc(1, 11, "1, 3", "Même évaluation")
+    _, rapport = construire(journal(b, bloc(1, 12, "2", "Une autre"), b))
+    assert rapport["evaluations"] == 2
+    assert rapport["doublons_ignores"] == [3]
+
+
+def test_deux_evaluations_du_meme_jour_ne_sont_pas_des_doublons():
+    _, rapport = construire(journal(
+        bloc(1, 11, "1", "Matin : mise en rayon"),
+        bloc(1, 11, "1", "Après-midi : encaissement"),
+    ))
+    assert rapport["evaluations"] == 2 and rapport["doublons_ignores"] == []
+
+
+def test_le_livret_se_lit_chronologiquement_quel_que_soit_l_ordre_recu():
+    pdf, _ = construire(journal(
+        bloc(1, 20, "1", "La plus tardive"),
+        bloc(1, 11, "1", "La plus ancienne"),
+        bloc(1, 15, "1", "Celle du milieu"),
+    ))
+    page = texte_page(pdf, 2)
+    ordre = [page.index(sans_espaces(t))
+             for t in ("La plus ancienne", "Celle du milieu", "La plus tardive")]
+    assert ordre == sorted(ordre)
