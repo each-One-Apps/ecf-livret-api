@@ -117,6 +117,30 @@ def lire_journal(journal):
     return evaluations
 
 
+def ecrire_journal(evaluations):
+    """Évaluations -> journal canonique, au même format que l'entrée.
+
+    C'est ce texte que l'appelant réécrit dans son champ : dédoublonné, trié,
+    et toujours relisible par `lire_journal`. Sans ça, un émetteur qui renvoie
+    son historique complet fait grossir le champ à chaque soumission.
+    """
+    blocs = []
+    for ev in evaluations:
+        blocs.append(
+            "Date : {date}\n"
+            "Activité : {intitule}\n"
+            "Compétences évaluées : {competences}\n"
+            "Description des compétences : {description}\n"
+            "----------".format(
+                date=ev["date"],
+                intitule=ev["intitule"],
+                competences=", ".join(str(n) for n in ev["competences"]),
+                description=ev["description"],
+            )
+        )
+    return "\n".join(blocs) + ("\n" if blocs else "")
+
+
 def concatener(journal, *blocs):
     """Ajoute des blocs au journal. Utilisé par les tests et en secours.
 

@@ -9,7 +9,7 @@ import json
 import os
 from functools import lru_cache
 
-from .parser import lire_journal
+from .parser import ecrire_journal, lire_journal
 from .render import LivretPlein, rendre
 
 DOSSIER = os.path.dirname(__file__)
@@ -97,6 +97,8 @@ def construire(journal, code=DEFAUT):
         "par_activite": par_activite,
         "descriptions_tronquees": tronquees,
         "doublons_ignores": doublons,
+        # Journal canonique à réécrire à la source : dédoublonné et trié.
+        "journal": ecrire_journal(evaluations),
     }
 
 

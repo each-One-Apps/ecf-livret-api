@@ -22,7 +22,7 @@ def test_appel_nominal_renvoie_le_format_attachment_airtable():
     """Airtable télécharge ses pièces jointes : il lui faut une URL, pas des octets."""
     r = client.post("/update-ecf-assessment", json={"log": BLOC_REEL, "record_id": RECORD})
     assert r.status_code == 200
-    (piece,) = r.json()
+    (piece,) = r.json()["attachment"]
     assert set(piece) == {"url", "filename"}
     assert piece["filename"] == f"livret_ecf_{RECORD}.pdf"
     assert "/livret.pdf?" in piece["url"]
@@ -32,7 +32,7 @@ def test_appel_nominal_renvoie_le_format_attachment_airtable():
 
 def test_l_url_renvoyee_produit_le_pdf():
     r = client.post("/update-ecf-assessment", json={"log": BLOC_REEL, "record_id": RECORD})
-    g = client.get(chemin_de(r.json()[0]["url"]))
+    g = client.get(chemin_de(r.json()["attachment"][0]["url"]))
     assert g.status_code == 200
     assert g.headers["content-type"] == "application/pdf"
     assert g.content[:5] == b"%PDF-"
@@ -40,7 +40,7 @@ def test_l_url_renvoyee_produit_le_pdf():
 
 def test_l_url_reproduit_le_rendu_direct_a_l_octet_pres():
     r = client.post("/update-ecf-assessment", json={"log": BLOC_REEL})
-    par_url = client.get(chemin_de(r.json()[0]["url"])).content
+    par_url = client.get(chemin_de(r.json()["attachment"][0]["url"])).content
     direct = client.post("/update-ecf-assessment?format=pdf", json={"log": BLOC_REEL}).content
     assert par_url == direct
 
@@ -111,7 +111,7 @@ def test_texte_brut_le_corps_est_le_journal():
     )
     assert r.status_code == 200
     assert r.headers["X-ECF-Evaluations"] == "1"
-    (piece,) = r.json()
+    (piece,) = r.json()["attachment"]
     assert piece["filename"] == f"livret_ecf_{RECORD}.pdf"
     assert client.get(chemin_de(piece["url"])).content[:5] == b"%PDF-"
 
@@ -156,3 +156,26 @@ def test_deux_appels_identiques_donnent_le_meme_fichier():
     a = client.post("/update-ecf-assessment", json=corps).content
     b = client.post("/update-ecf-assessment", json=corps).content
     assert a == b
+
+
+def test_le_journal_renvoye_est_dedoublonne_et_trie():
+    """C'est ce texte que l'appelant réécrit : sans lui, son champ grossit sans fin."""
+    from ecf.parser import lire_journal
+    bloc = lambda j, d: (f"Date : 2026-08-{j}\nActivité : 1. Peu importe\n"
+                         f"Compétences évaluées : 1\nDescription des compétences : {d}")
+    envoye = "\n----------\n".join([bloc("13", "Tardive"), bloc("11", "Ancienne"),
+                                     bloc("13", "Tardive")])
+    r = client.post("/update-ecf-assessment", json={"log": envoye})
+    corps = r.json()
+    assert corps["evaluations"] == 2 and corps["doublons_ignores"] == [3]
+    relu = lire_journal(corps["journal"])
+    assert [e["date"] for e in relu] == ["11/08/2026", "13/08/2026"]
+
+
+def test_le_journal_renvoye_est_stable_si_on_le_renvoie():
+    """Rejouer le journal canonique ne doit plus rien changer."""
+    r1 = client.post("/update-ecf-assessment", json={"log": BLOC_REEL}).json()
+    r2 = client.post("/update-ecf-assessment", json={"log": r1["journal"]}).json()
+    assert r2["journal"] == r1["journal"]
+    assert r2["attachment"] == r1["attachment"]
+    assert r2["doublons_ignores"] == []

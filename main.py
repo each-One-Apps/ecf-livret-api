@@ -162,7 +162,10 @@ async def update_ecf_assessment(
         return Response(content=pdf, media_type="application/pdf", headers=entetes)
 
     # Format Airtable : le champ attachment attend [{url, filename}].
-    encode = _encoder_journal(log)
+    # On encode le journal CANONIQUE, pas ce qui a été reçu : l'URL est ainsi
+    # plus courte (sans les doublons) et identique pour un même jeu
+    # d'évaluations, quelle que soit la mise en forme d'origine.
+    encode = _encoder_journal(rapport["journal"])
     if len(encode) > URL_MAX:
         raise HTTPException(
             status_code=422,
@@ -172,4 +175,14 @@ async def update_ecf_assessment(
     url = "{}/livret.pdf?{}".format(
         _base_url(request), urlencode({"j": encode, "livret": livret, "nom": nom}, quote_via=quote)
     )
-    return JSONResponse(content=[{"url": url, "filename": nom}], headers=entetes)
+    return JSONResponse(
+        content={
+            "attachment": [{"url": url, "filename": nom}],
+            # À réécrire tel quel à la source : c'est ce qui empêche le journal
+            # de grossir quand l'émetteur renvoie son historique complet.
+            "journal": rapport["journal"],
+            "evaluations": rapport["evaluations"],
+            "doublons_ignores": rapport["doublons_ignores"],
+        },
+        headers=entetes,
+    )

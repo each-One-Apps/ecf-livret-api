@@ -77,8 +77,18 @@ Les deux formes produisent le même fichier. `livret` est optionnel (défaut `TP
 descriptions qui ne tenaient pas dans leur cellule).
 
 ```json
-[{"url": "https://…/livret.pdf?j=eNqFz8EK…", "filename": "livret_ecf_rec….pdf"}]
+{
+  "attachment": [{"url": "https://…/livret.pdf?j=eNqFz8EK…", "filename": "livret_ecf_rec….pdf"}],
+  "journal": "Date : 11/08/2026\nActivité : 1. …\n----------\n",
+  "evaluations": 2,
+  "doublons_ignores": [3]
+}
 ```
+
+`attachment` va dans le champ pièce jointe. **`journal` est à réécrire à la source** : c'est le
+journal canonique, dédoublonné et trié, toujours relisible par le service. Sans cette
+réécriture, un émetteur qui renvoie son historique complet à chaque envoi fait doubler le champ
+à chaque soumission.
 
 Ajouter `?format=pdf` pour récupérer le binaire directement — pratique en test.
 
