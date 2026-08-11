@@ -21,7 +21,20 @@ def journal(*blocs):
 
 
 def texte_page(pdf_bytes, index):
-    return PdfReader(io.BytesIO(pdf_bytes)).pages[index].extract_text()
+    """Texte d'une page, espaces retirés.
+
+    Le template porte ses propres glyphes d'espace dans les cellules ; à
+    l'extraction ils s'intercalent dans le texte ajouté et « Entretien » ressort
+    en « E ntretien ». C'est un artefact de la couche texte, pas du rendu (les
+    glyphes ajoutés sont contigus à 0,00 pt). Comparer sans espaces évite des
+    échecs qui ne veulent rien dire — et des succès accidentels.
+    """
+    texte = PdfReader(io.BytesIO(pdf_bytes)).pages[index].extract_text() or ""
+    return "".join(texte.split())
+
+
+def sans_espaces(texte):
+    return "".join(texte.split())
 
 
 def test_geometrie_conforme_au_template():
@@ -49,11 +62,11 @@ def test_description_ecrite_sur_la_bonne_page():
         bloc(2, 12, "4", "Entretien de vente filmé"),
     ))
     assert rapport["par_activite"] == {1: 1, 2: 1}
-    assert "Veille concurrentielle en magasin" in texte_page(pdf, 2)
-    assert "Entretien de vente filmé" in texte_page(pdf, 5)
+    assert sans_espaces("Veille concurrentielle en magasin") in texte_page(pdf, 2)
+    assert sans_espaces("Entretien de vente filmé") in texte_page(pdf, 5)
     # Chaque description reste sur la fiche de son activité.
-    assert "Entretien de vente" not in texte_page(pdf, 2)
-    assert "Veille concurrentielle" not in texte_page(pdf, 5)
+    assert sans_espaces("Entretien de vente") not in texte_page(pdf, 2)
+    assert sans_espaces("Veille concurrentielle") not in texte_page(pdf, 5)
 
 
 def test_les_lignes_se_remplissent_dans_l_ordre():
@@ -61,7 +74,7 @@ def test_les_lignes_se_remplissent_dans_l_ordre():
         bloc(1, 10 + i, "1", f"Évaluation numéro {i}") for i in range(1, 6)
     ]))
     page = texte_page(pdf, 2)
-    positions = [page.index(f"Évaluation numéro {i}") for i in range(1, 6)]
+    positions = [page.index(sans_espaces(f"Évaluation numéro {i}")) for i in range(1, 6)]
     assert positions == sorted(positions)
 
 
@@ -75,8 +88,9 @@ def test_un_bloc_de_plus_ne_deplace_pas_les_precedents():
     premier = bloc(1, 11, "1", "Toute première évaluation")
     page_avant = texte_page(construire(premier)[0], 2)
     page_apres = texte_page(construire(journal(premier, bloc(1, 12, "2", "La suivante")))[0], 2)
-    assert "Toute première évaluation" in page_avant
-    assert page_apres.index("Toute première évaluation") < page_apres.index("La suivante")
+    assert sans_espaces("Toute première évaluation") in page_avant
+    assert (page_apres.index(sans_espaces("Toute première évaluation"))
+            < page_apres.index(sans_espaces("La suivante")))
 
 
 def test_sixieme_evaluation_refusee():
