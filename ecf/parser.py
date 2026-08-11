@@ -178,10 +178,22 @@ def lire_journal(journal):
         rang = len(evaluations) + 1
         champs = _champs(bloc, rang)
 
+        # Squelette d'évaluation : une soumission qui ne portait qu'un avis fait
+        # quand même émettre le bloc, avec la date et l'activité pré-remplies mais
+        # rien à écrire dans le tableau. Il n'y a rien à perdre, on l'ignore.
+        #
+        # `champs` non vide est essentiel : il prouve qu'on est bien dans notre
+        # format. Un contenu étranger (une réflexion AFEST, par exemple) n'a aucun
+        # libellé reconnu et doit être REFUSÉ, pas ignoré — sans quoi le scénario
+        # écraserait le journal d'un apprenant par un livret vide.
+        if champs and not champs.get("competences") and not champs.get("description"):
+            continue
+
         manquants = [c for c in CHAMPS_ATTENDUS if not champs.get(c)]
         if manquants:
             raise JournalInvalide(
-                f"évaluation {rang} : champ(s) {', '.join(manquants)} absent(s) ou vide(s)"
+                f"évaluation {rang} : champ(s) {', '.join(manquants)} absent(s) ou vide(s). "
+                f"Une évaluation partielle est refusée ; un bloc entièrement vide serait ignoré."
             )
 
         evaluations.append({

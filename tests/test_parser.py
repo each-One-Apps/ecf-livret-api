@@ -150,3 +150,34 @@ def test_deux_blocs_colles_sont_refuses():
     with pytest.raises(JournalInvalide) as e:
         lire_journal(colle)
     assert "deux fois" in str(e.value) and "----------" in str(e.value)
+
+
+def test_squelette_d_evaluation_ignore():
+    """Une soumission qui ne porte qu'un avis émet quand même un bloc d'évaluation vide."""
+    squelette = ("Date : 2026-08-11\n"
+                 "Activité : 1. Contribuer à l'efficacité commerciale\n"
+                 "Compétences évaluées : \n"
+                 "Description des compétences : ")
+    assert lire_evaluations(squelette) == []
+    assert len(lire_evaluations(concatener(BLOC_REEL, squelette))) == 1
+
+
+def test_evaluation_partielle_toujours_refusee():
+    """Une description sans compétence reste une erreur : la ligne serait muette."""
+    partielle = ("Date : 2026-08-11\nActivité : 1. X\n"
+                 "Compétences évaluées : \nDescription des compétences : Un texte")
+    with pytest.raises(JournalInvalide) as e:
+        lire_journal(partielle)
+    assert "competences" in str(e.value)
+
+
+def test_un_contenu_etranger_reste_refuse_meme_sans_champs():
+    """Le squelette est ignoré, mais du contenu hors format doit toujours échouer.
+
+    Sinon un scénario visant une ligne AFEST écraserait la réflexion de
+    l'apprenant par un livret vide, sans la moindre alerte.
+    """
+    with pytest.raises(JournalInvalide):
+        lire_journal(REFLEXION_AFEST)
+    with pytest.raises(JournalInvalide):
+        lire_journal("Un texte quelconque\nsans aucun libellé attendu")
