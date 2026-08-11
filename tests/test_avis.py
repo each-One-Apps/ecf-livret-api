@@ -169,3 +169,20 @@ def test_l_url_du_livret_refuse_aussi_une_signature_injoignable(tmp_path):
     ok = client.post("/update-ecf-assessment", json={"log": avis()})
     chemin = "/livret.pdf" + ok.json()["attachment"][0]["url"].split("/livret.pdf", 1)[1]
     assert client.get(chemin).status_code == 200
+
+
+def test_bloc_avis_entierement_vide_ignore():
+    """Une soumission qui ne concerne pas cette activité émet un bloc vide."""
+    vide = ("Avis activité : \nRésultat : \nPoints d'attention : \n"
+            "Compétences à réévaluer : \nFormateur 1 : \nFormateur 2 : \n"
+            "Date de l'avis : \nSignature 1 : \nSignature 2 : \n----------")
+    _, rapport = construire(vide)
+    assert rapport["avis"] == 0
+
+
+def test_avis_rempli_sans_activite_refuse():
+    """Un résultat sans savoir quelle fiche cocher doit échouer, pas deviner."""
+    bancal = avis().replace("Avis activité : Activité-type 1", "Avis activité : ")
+    with pytest.raises(ValueError) as e:
+        construire(bancal)
+    assert "activité introuvable" in str(e.value)

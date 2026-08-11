@@ -124,9 +124,14 @@ def _lire_avis(bloc, rang):
     le refuser — un avis se remplit après les évaluations, pas en même temps.
     """
     champs = _champs(bloc, rang, RE_LIBELLE_AVIS)
-    numero = _numero_activite_libre(champs.get("activite", ""), rang)
+
+    # Rien à dessiner tant que le formateur n'a pas tranché. On sort AVANT de
+    # réclamer le numéro d'activité : un bloc entièrement vide arrive à chaque
+    # soumission qui ne concerne pas cette activité-là.
     if not champs.get("resultat"):
         return None
+
+    numero = _numero_activite_libre(champs.get("activite", ""), rang)
 
     avis = {
         "activite": numero,
@@ -150,7 +155,10 @@ def _numero_activite_libre(valeur, rang):
     m = re.search(r"(\d+)", valeur or "")
     if not m:
         raise JournalInvalide(
-            f"avis {rang} : impossible de déterminer l'activité depuis « {valeur[:60]} »"
+            f"avis {rang} : activité introuvable (« {valeur[:40]} »). La ligne "
+            f"« Avis activité » doit porter le choix du formateur, par exemple "
+            f"« Activité-type 1 ». Un seul bloc d'avis par soumission : c'est ce "
+            f"choix qui désigne la fiche."
         )
     return int(m.group(1))
 
