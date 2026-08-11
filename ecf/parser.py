@@ -195,6 +195,13 @@ def _lire_candidat(bloc):
         cle: " ".join(champs.get(cle, "").split())
         for cle in ("civilite", "nom", "prenom", "naissance", "organisme", "lieu")
     }
+    # Document français : une date de naissance en AAAA-MM-JJ se lit mal.
+    # Ce qui n'est pas une date reconnue est laissé tel quel.
+    if candidat["naissance"]:
+        try:
+            candidat["naissance"] = _date(candidat["naissance"], 1)
+        except JournalInvalide:
+            pass
     return candidat if any(candidat.values()) else None
 
 
@@ -224,6 +231,18 @@ def lire_journal(journal):
     for bloc in SEPARATEUR.split(journal):
         if not bloc.strip():
             continue
+
+        # Un bloc ne peut être que d'une nature. En porter deux signale un
+        # séparateur « ---------- » oublié entre eux : sans ce contrôle, le
+        # premier serait avalé par le second et disparaîtrait sans un mot.
+        natures = [nom for nom, motif in (("Candidat", RE_EST_CANDIDAT),
+                                          ("Avis activité", RE_EST_AVIS))
+                   if motif.search(bloc)]
+        if len(natures) > 1:
+            raise JournalInvalide(
+                f"un même bloc porte « {' » et « '.join(natures)} » : il manque une "
+                f"ligne « ---------- » entre eux, et l'un des deux serait perdu."
+            )
 
         if RE_EST_CANDIDAT.search(bloc):
             lu = _lire_candidat(bloc)

@@ -121,3 +121,25 @@ def test_les_dates_du_titre_sur_la_page_de_garde():
                           "date_effet": "1er septembre 2022"})
     page = texte(pdf)
     assert "21juillet2022" in page and "2août2022" in page and "1erseptembre2022" in page
+
+
+def test_deux_natures_dans_un_bloc_refusees():
+    """Séparateur oublié : l'avis serait avalé par le bloc candidat, en silence."""
+    from ecf.parser import JournalInvalide, lire_journal
+
+    colle = (
+        "Avis activité : Activité-type 1\n"
+        "Résultat : Avoir satisfait aux critères issus des référentiels du titre "
+        "professionnel attendus pour la réalisation de cette activité-type.\n"
+        "Formateur 1 : Camille\n"
+        "Candidat :\nNom : MARTINEZ\n----------"
+    )
+    with pytest.raises(JournalInvalide) as e:
+        lire_journal(colle)
+    assert "----------" in str(e.value)
+
+
+def test_la_date_de_naissance_est_mise_au_format_francais():
+    pdf, rapport = construire(CANDIDAT.replace("14/03/1998", "1991-09-05"))
+    assert rapport["candidat"]["naissance"] == "05/09/1991"
+    assert "05/09/1991" in texte(pdf)
